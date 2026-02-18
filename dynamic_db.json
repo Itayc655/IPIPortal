@@ -1,0 +1,80 @@
+[
+  {
+    "id": 1771246022698,
+    "title": "כל המוצרים",
+    "color": "red",
+    "schema": [
+      {
+        "key": "f_title",
+        "label": "מוצר",
+        "type": "text"
+      },
+      {
+        "key": "f_1771245976943",
+        "label": "ספק",
+        "type": "text"
+      },
+      {
+        "key": "f_1771245993675",
+        "label": "סיסמאות רלוונטית",
+        "type": "password"
+      },
+      {
+        "key": "f_1771246003368",
+        "label": "קבצים",
+        "type": "file"
+      },
+      {
+        "key": "f_1771246014775",
+        "label": "הערות",
+        "type": "textarea"
+      },
+      {
+        "key": "f_1771321630915",
+        "label": "קישורים רלוונטים",
+        "type": "link"
+      }
+    ],
+    "items": [
+      {
+        "id": 1771253347261,
+        "data": {
+          "f_1771246003368": [],
+          "f_title": "DMV",
+          "f_1771245976943": "dmv",
+          "f_1771245993675": {
+            "username": "gal.shneor",
+            "password": "6f27ba6b5c9f7b3c39a112685bf68ae0:f93f0fac4f1b69084bc0af1b1b657de9"
+          },
+          "f_1771246014775": "- יש לשים לב ל...\n\n- מותקן ב..."
+        }
+      }
+    ]
+  },
+  {
+    "id": 1771246059245,
+    "title": "טפסים שימושיים",
+    "color": "blue",
+    "schema": [
+      {
+        "key": "f_title",
+        "label": "שם הטופס",
+        "type": "text"
+      },
+      {
+        "key": "f_1771246047880",
+        "label": "קישור",
+        "type": "link"
+      }
+    ],
+    "items": [
+      {
+        "id": 1771246107128,
+        "data": {
+          "f_title": "טופס בקשת חופשה",
+          "f_1771246047880": "https://forms.office.com/r/0SDE3XYZpt?origin=lprLink"
+        }
+      }
+    ]
+  }
+]

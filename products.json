@@ -1,0 +1,133 @@
+[
+  {
+    "id": 1770799666001,
+    "name": "DMV",
+    "vendor": "DMV",
+    "status": "active",
+    "ip": "",
+    "notes": "הערה",
+    "createdAt": "2026-02-11T08:47:46.001Z",
+    "manualUrls": [],
+    "passwords": "gal shneor  DMV2026! \r\n",
+    "vendorUrl": "https://www.dmv.rs/",
+    "username": "gal.shneor",
+    "password": "DMV2026!",
+    "passwordNote": "https://www.dmv-cloud.com/auth/login",
+    "passwordsList": [
+      {
+        "username": "gal.shneor",
+        "password": "DMV2026!",
+        "note": "https://www.dmv-cloud.com/auth/login"
+      }
+    ]
+  },
+  {
+    "id": 1770807032160,
+    "name": "Icoms",
+    "vendor": "icoms/quarterhill",
+    "ip": "",
+    "notes": "",
+    "passwords": "",
+    "manualUrls": [],
+    "createdAt": "2026-02-11T10:50:32.160Z",
+    "vendorUrl": "https://www.icomsdetections.com/",
+    "passwordsList": [
+      {
+        "username": "",
+        "password": "",
+        "note": ""
+      }
+    ]
+  },
+  {
+    "id": 1770807061436,
+    "name": "Qulon",
+    "vendor": "Qulon",
+    "ip": "",
+    "notes": "",
+    "passwords": "",
+    "manualUrls": [],
+    "createdAt": "2026-02-11T10:51:01.436Z",
+    "vendorUrl": "https://ditra-solutions.com/",
+    "passwordsList": [
+      {
+        "username": "",
+        "password": "",
+        "note": ""
+      }
+    ]
+  },
+  {
+    "id": 1770807077934,
+    "name": "ITC-2",
+    "vendor": "swarco",
+    "ip": "",
+    "notes": "",
+    "passwords": "",
+    "manualUrls": [],
+    "createdAt": "2026-02-11T10:51:17.934Z",
+    "vendorUrl": "https://www.swarco.com/products/software/urban-traffic-management/itc-web-interface"
+  },
+  {
+    "id": 1770807094285,
+    "name": "ITC-3",
+    "vendor": "swarco",
+    "ip": "",
+    "notes": "",
+    "passwords": "",
+    "manualUrls": [],
+    "createdAt": "2026-02-11T10:51:34.285Z",
+    "vendorUrl": "https://www.swarco.com/products/traffic-light-controllers/itc-3-traffic-controller"
+  },
+  {
+    "id": 1770807103068,
+    "name": "Safelight",
+    "vendor": "swarco",
+    "ip": "",
+    "notes": "",
+    "passwords": "",
+    "manualUrls": [],
+    "createdAt": "2026-02-11T10:51:43.068Z",
+    "vendorUrl": "https://www.swarco.com/safelight"
+  },
+  {
+    "id": 1770807130579,
+    "name": "Omnia",
+    "vendor": "swarco",
+    "ip": "",
+    "notes": "",
+    "passwords": "",
+    "manualUrls": [],
+    "createdAt": "2026-02-11T10:52:10.579Z",
+    "vendorUrl": "https://www.swarco.com/products/software/urban-traffic-management/omnia"
+  },
+  {
+    "id": 1770807145311,
+    "name": "Swarco cloud",
+    "vendor": "swarco",
+    "ip": "",
+    "notes": "",
+    "passwords": "",
+    "manualUrls": [],
+    "createdAt": "2026-02-11T10:52:25.311Z",
+    "vendorUrl": "undefined",
+    "passwordsList": [
+      {
+        "username": "",
+        "password": "",
+        "note": ""
+      }
+    ]
+  },
+  {
+    "id": 1770807189525,
+    "name": "VMS",
+    "vendor": "swarco",
+    "ip": "",
+    "notes": "",
+    "passwords": "",
+    "manualUrls": [],
+    "createdAt": "2026-02-11T10:53:09.525Z",
+    "vendorUrl": "https://www.swarco.com/products/electronic-signs/variable-message-signs"
+  }
+]
