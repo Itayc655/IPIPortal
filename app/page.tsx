@@ -623,12 +623,7 @@ export default function DynamicIPIDashboard() {
                                         ? rawTitle
                                         : (rawTitle ? "(תוכן מורכב)" : "ללא כותרת");
 
-                                    // שליפת תת-כותרת
-                                    const rawSubtitle = section.schema[1] ? item.data[section.schema[1].key] : null;
-                                    const displaySubtitle = (typeof rawSubtitle === 'string' || typeof rawSubtitle === 'number')
-                                        ? rawSubtitle
-                                        : null;
-
+                                    
                                     return (
                                         <div
                                             key={item.id}
@@ -655,13 +650,6 @@ export default function DynamicIPIDashboard() {
                                                 <h3 className={`text-xl font-extrabold text-slate-800 line-clamp-2 leading-tight group-hover:text-white w-full`}>
                                                     {displayTitle}
                                                 </h3>
-
-                                                {/* תת-כותרת מוגנת */}
-                                                {displaySubtitle && (
-                                                    <p className="text-sm font-medium text-slate-400 line-clamp-1 group-hover:text-blue-50/80">
-                                                        {displaySubtitle}
-                                                    </p>
-                                                )}
                                             </div>
 
                                             {/* כפתור צפייה */}
@@ -679,13 +667,13 @@ export default function DynamicIPIDashboard() {
                                                 <div className="absolute top-3 left-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 z-20">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); openEditItemModal(section, item); }}
-                                                        className="p-1.5 bg-white/20 backdrop-blur-md text-white hover:bg-white hover:text-blue-600 rounded-full shadow-sm border border-white/30 hover:scale-110 active:scale-95 transition-all"
+                                                        className="p-1.5 bg-white/20 backdrop-blur-md cursor-pointer text-white hover:bg-white hover:text-blue-600 rounded-full shadow-sm border border-white/30 hover:scale-110 active:scale-95 transition-all"
                                                     >
                                                         <Edit size={14} />
                                                     </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleDeleteItem(section.id, item.id); }}
-                                                        className="p-1.5 bg-white/20 backdrop-blur-md text-white hover:bg-white hover:text-red-500 rounded-full shadow-sm border border-white/30 hover:scale-110 active:scale-95 transition-all"
+                                                        className="p-1.5 bg-white/20 backdrop-blur-md text-white cursor-pointer hover:bg-white hover:text-red-500 rounded-full shadow-sm border border-white/30 hover:scale-110 active:scale-95 transition-all"
                                                     >
                                                         <Trash2 size={14} />
                                                     </button>
@@ -733,7 +721,7 @@ export default function DynamicIPIDashboard() {
                         {isEditMode && (
                             <button
                                 onClick={() => setIsPhonebookEditMode(!isPhonebookEditMode)}
-                                className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all shadow-lg ${isPhonebookEditMode ? 'bg-slate-900 text-amber-400' : 'bg-white text-slate-600 border border-slate-100 hover:bg-slate-50'}`}
+                                className={`flex items-center gap-2 px-6 py-3 cursor-pointer rounded-2xl font-bold transition-all shadow-lg ${isPhonebookEditMode ? 'bg-slate-900 text-amber-400' : 'bg-white text-slate-600 border border-slate-100 hover:bg-slate-50'}`}
                             >
                                 {isPhonebookEditMode ? <Check size={20} /> : <Edit size={20} />}
                                 {isPhonebookEditMode ? 'שמור שינויים' : 'ערוך טבלה'}
@@ -764,7 +752,7 @@ export default function DynamicIPIDashboard() {
                                                                 onChange={(e) => updateColumnTitle(col.key, e.target.value)}
                                                                 className="bg-amber-100/50 border-b-2 border-amber-400 focus:border-amber-600 outline-none w-full py-2 font-black text-amber-900 rounded px-2 text-lg"
                                                             />
-                                                            <button onClick={() => removeColumn(col.key)} className="text-amber-400 hover:text-red-500 transition-colors shrink-0"><X size={20} /></button>
+                                                            <button onClick={() => removeColumn(col.key)} className="text-amber-400 hover:text-red-500 transition-colors shrink-0 cursor-pointer"><X size={20} /></button>
                                                         </div>
                                                     ) : (
                                                         <span className="drop-shadow-sm">{col.label}</span>
@@ -772,7 +760,7 @@ export default function DynamicIPIDashboard() {
                                                 </div>
                                             </th>
                                         ))}
-                                        {isPhonebookEditMode && <th className="w-16 text-center"><button onClick={addColumn} className="bg-amber-600 text-white p-2.5 rounded-xl hover:bg-amber-700 transition-all shadow-md"><Plus size={22} /></button></th>}
+                                        {isPhonebookEditMode && <th className="w-16 text-center"><button onClick={addColumn} className="bg-amber-600 text-white cursor-pointer p-2.5 rounded-xl hover:bg-amber-700 transition-all shadow-md"><Plus size={22} /></button></th>}
                                     </tr>
                                 </thead>
 
@@ -808,7 +796,7 @@ export default function DynamicIPIDashboard() {
 
                                                 {isPhonebookEditMode && (
                                                     <td className="px-6 py-4 text-left rounded-l-[1.5rem]">
-                                                        <button onClick={() => deletePhonebookRow(row.id)} className="bg-red-50 text-red-500 hover:bg-white p-3 rounded-xl transition-all shadow-sm"><Trash2 size={20} /></button>
+                                                        <button onClick={() => deletePhonebookRow(row.id)} className="bg-red-50 text-red-500 hover:bg-white p-3 rounded-xl transition-all shadow-sm cursor-pointer"><Trash2 size={20} /></button>
                                                     </td>
                                                 )}
                                             </tr>
@@ -820,7 +808,7 @@ export default function DynamicIPIDashboard() {
 
                         {isPhonebookEditMode && (
                             <div className="p-8 border-t border-amber-50 flex justify-center bg-amber-50/30">
-                                <button onClick={addPhonebookRow} className="flex items-center gap-3 text-white font-black bg-slate-900 px-12 py-5 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-2xl">
+                                <button onClick={addPhonebookRow} className="flex items-center gap-3 cursor-pointer text-white font-black bg-slate-900 px-12 py-5 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-2xl">
                                     <Plus size={24} /> הוסף עובד חדש
                                 </button>
                             </div>
@@ -994,7 +982,7 @@ export default function DynamicIPIDashboard() {
             {/* --- MODAL 2: בונה הקטגוריות (עם DND) --- */}
             {showCreateSectionModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { setShowCreateSectionModal(false); setEditingSectionId(null); setNewSectionTitle(""); setNewSectionFields([]); }}>
-                    <div className="bg-white rounded-[2.5rem] w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl p-10 animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-white relative rounded-[2.5rem] w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl p-10 animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-8">
                             <h2 className="text-3xl font-black text-slate-800">{editingSectionId ? 'עריכת קטגוריה' : 'הגדרת קטגוריה חדשה'}</h2>
                             <button onClick={() => { setShowCreateSectionModal(false); setEditingSectionId(null); setNewSectionTitle(""); setNewSectionFields([]); }} className="absolute top-8 left-8 text-slate-400 transition-colors cursor-pointer hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full">
@@ -1171,7 +1159,7 @@ export default function DynamicIPIDashboard() {
                                                             </div>
                                                         ))}
                                                     </div>
-                                                    <button onClick={addRow} className="mt-4 flex items-center gap-2 text-sm font-bold text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg transition-colors">
+                                                    <button onClick={addRow} className="mt-4 flex items-center gap-2 text-sm font-bold text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg transition-colors cursor-pointer">
                                                         <Plus size={16} /> הוסף עובד
                                                     </button>
                                                 </div>

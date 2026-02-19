@@ -1,7 +1,12 @@
+export const dynamic = 'force-dynamic'; // פקודה זו מכריחה את השרת לשלוף נתונים חיים בלבד
+
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { getConnection } from '@/lib/db'; // ודא שהנתיב תואם למיקום שיצרת בו את הקובץ
+import sql from 'mssql';
+
 
 // --- הגדרות הצפנה ---
 // חשוב: במערכת אמיתית, המפתח הזה צריך להיות משתנה סביבה (ENV) ולא בקוד
@@ -97,55 +102,140 @@ const saveData = (sections: any[]) => {
 
 // --- API HANDLERS ---
 
+
+// שליפת הנתונים ממסד הנתונים והצגתם באתר
 export async function GET() {
-  return NextResponse.json(getData());
+  try {
+    const pool = await getConnection();
+    
+    const sectionsResult = await pool.request().query('SELECT * FROM Sections');
+    const itemsResult = await pool.request().query('SELECT * FROM Items');
+
+    const sections = sectionsResult.recordset;
+    const items = itemsResult.recordset;
+
+    const formattedData = sections.map(section => ({
+      id: Number(section.Id),
+      title: section.Title,
+      color: section.Color,
+      schema: JSON.parse(section.SchemaDef || '[]'),
+      items: items
+        .filter(item => Number(item.SectionId) === Number(section.Id))
+        .map(item => ({
+          id: Number(item.Id),
+          data: JSON.parse(item.Data || '{}')
+        }))
+    }));
+
+    return NextResponse.json(formattedData);
+    
+  } catch (error) {
+    console.error('Database connection or GET query failed:', error);
+    return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
+  }
 }
 
-export async function POST(req: Request) {
-  // 1. קבלת המידע המפוענח הנוכחי
-  const sections = getData(); 
-  const body = await req.json();
-
-  // 2. ביצוע השינויים (על המידע הגלוי בזיכרון)
-  if (body.action === 'create_section') {
-      const nextColor = AUTO_COLORS[sections.length % AUTO_COLORS.length];
-      sections.push({
-          id: Date.now(),
-          title: body.title,
-          color: nextColor, 
-          schema: body.schema, 
-          items: []
-      });
-  } 
-  else if (body.action === 'update_section') {
-      const section = sections.find((s: any) => s.id === body.id);
-      if (section) {
-          section.title = body.title;
-          section.schema = body.schema;
-      }
-  }
-  else if (body.action === 'add_item') {
-      const section = sections.find((s: any) => s.id === body.sectionId);
-      if (section) section.items.push({ id: Date.now(), data: body.data });
-  }
-  else if (body.action === 'update_item') {
-      const section = sections.find((s: any) => s.id === body.sectionId);
-      if (section) {
-          const item = section.items.find((i: any) => i.id === body.itemId);
-          if (item) item.data = body.data;
-      }
-  }
-  else if (body.action === 'delete_section') {
-      const index = sections.findIndex((s: any) => s.id === body.id);
-      if (index > -1) sections.splice(index, 1);
-  }
-  else if (body.action === 'delete_item') {
-      const section = sections.find((s: any) => s.id === body.sectionId);
-      if (section) section.items = section.items.filter((i: any) => i.id !== body.itemId);
-  }
-
-  // 3. שמירה לקובץ (הפונקציה saveData תבצע הצפנה לפני הכתיבה)
-  saveData(sections);
+// שמירת הנתונים החדשים מהאתר לתוך מסד הנתונים
+export async function POST(request: Request) {
+  console.log('>>> 1. POST Request Started');
   
-  return NextResponse.json(sections);
+  try {
+    const body = await request.json();
+    console.log(`>>> 2. Action Received: ${body.action}`);
+
+    console.log('>>> 3. Waiting for DB Connection...');
+    const pool = await getConnection();
+    console.log('>>> DB Connection Verified');
+    
+    const generateId = () => Date.now();
+
+    if (body.action === 'create_section') {
+      console.log(`>>> 4. Processing create_section: ${body.title}`);
+      
+      const countReq = new sql.Request(pool);
+      const countRes = await countReq.query('SELECT COUNT(*) as cnt FROM Sections');
+      const count = countRes.recordset[0].cnt;
+      const nextColor = AUTO_COLORS[count % AUTO_COLORS.length];
+
+      const req = new sql.Request(pool);
+      await req
+        .input('Id', sql.BigInt, generateId())
+        .input('Title', sql.NVarChar, body.title)
+        .input('Color', sql.NVarChar, nextColor)
+        .input('SchemaDef', sql.NVarChar, JSON.stringify(body.schema || []))
+        .query('INSERT INTO Sections (Id, Title, Color, SchemaDef) VALUES (@Id, @Title, @Color, @SchemaDef)');
+        
+      console.log('>>> Section saved to SQL successfully!');
+    } 
+    
+    else if (body.action === 'update_section') {
+      //... (שאר התנאים פועלים באותה צורה)
+      const req = new sql.Request(pool);
+      await req
+        .input('Id', sql.BigInt, body.id)
+        .input('Title', sql.NVarChar, body.title)
+        .input('SchemaDef', sql.NVarChar, JSON.stringify(body.schema || []))
+        .query('UPDATE Sections SET Title = @Title, SchemaDef = @SchemaDef WHERE Id = @Id');
+    }
+    
+    else if (body.action === 'add_item') {
+      console.log('>>> 4. Processing add_item');
+      const req = new sql.Request(pool);
+      await req
+        .input('Id', sql.BigInt, generateId())
+        .input('SectionId', sql.BigInt, body.sectionId)
+        .input('Data', sql.NVarChar, JSON.stringify(body.data || {}))
+        .query('INSERT INTO Items (Id, SectionId, Data) VALUES (@Id, @SectionId, @Data)');
+    }
+    
+    else if (body.action === 'update_item') {
+      const req = new sql.Request(pool);
+      await req
+        .input('Id', sql.BigInt, body.itemId)
+        .input('SectionId', sql.BigInt, body.sectionId)
+        .input('Data', sql.NVarChar, JSON.stringify(body.data || {}))
+        .query('UPDATE Items SET Data = @Data WHERE Id = @Id AND SectionId = @SectionId');
+    }
+    
+    else if (body.action === 'delete_section') {
+      const req = new sql.Request(pool);
+      await req
+        .input('Id', sql.BigInt, body.id)
+        .query('DELETE FROM Sections WHERE Id = @Id');
+    }
+    
+    else if (body.action === 'delete_item') {
+      const req = new sql.Request(pool);
+      await req
+        .input('Id', sql.BigInt, body.itemId)
+        .query('DELETE FROM Items WHERE Id = @Id');
+    }
+
+    console.log('>>> 5. Fetching updated data from SQL...');
+    const sectionsResult = await pool.request().query('SELECT * FROM Sections');
+    const itemsResult = await pool.request().query('SELECT * FROM Items');
+
+    const sectionsData = sectionsResult.recordset;
+    const itemsData = itemsResult.recordset;
+
+    const formattedData = sectionsData.map(section => ({
+      id: Number(section.Id),
+      title: section.Title,
+      color: section.Color,
+      schema: JSON.parse(section.SchemaDef || '[]'),
+      items: itemsData
+        .filter(item => Number(item.SectionId) === Number(section.Id))
+        .map(item => ({
+          id: Number(item.Id),
+          data: JSON.parse(item.Data || '{}')
+        }))
+    }));
+
+    console.log('>>> 6. Sending successful response back to Frontend!');
+    return NextResponse.json(formattedData);
+
+  } catch (error) {
+    console.error('>>> ERROR CAUGHT IN POST:', error);
+    return NextResponse.json({ error: 'Failed to process request' }, { status: 500 });
+  }
 }
