@@ -555,7 +555,15 @@ export default function DynamicIPIDashboard() {
                     </div>
                 </div>
                 <button
-                    onClick={() => isEditMode ? setIsEditMode(false) : setShowLoginModal(true)}
+                    onClick={() => {
+                        if (isEditMode) {
+                            // אם אנחנו יוצאים ממצב עריכה
+                            setIsEditMode(false);
+                            setIsPhonebookEditMode(false); // <--- הוסף את השורה הזו כאן
+                        } else {
+                            setShowLoginModal(true);
+                        }
+                    }}
                     className={`flex items-center gap-3 px-6 py-3 rounded-full font-bold text-base cursor-pointer transition-all border shadow-sm 
                         ${isEditMode
                             ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 hover:border-red-300 hover:text-red-700'
