@@ -362,38 +362,43 @@ export default function DynamicIPIDashboard() {
     const [unlockedPasswords, setUnlockedPasswords] = useState<Record<string, number>>({});
 
     const [isPhonebookEditMode, setIsPhonebookEditMode] = useState(false);
+    useEffect(() => {
+        const loadPhonebook = async () => {
+            try {
+                const res = await fetch('/api/phonebook');
+                const json = await res.json();
 
-    // טעינת נתונים + תיקון אוטומטי למבנה הישן
-  useEffect(() => {
-    const savedData = localStorage.getItem('phonebook_data');
-    const savedSchema = localStorage.getItem('phonebook_schema');
-    
-    if (savedData) setPhonebookData(JSON.parse(savedData));
-    
-    if (savedSchema) {
-        let schema = JSON.parse(savedSchema);
-        // בדיקה: האם עמודת יום הולדת קיימת? אם לא - נוסיף אותה
-        const hasBirthday = schema.some((col: any) => col.key === 'birthday');
-        if (!hasBirthday) {
-            schema.push({ key: 'birthday', label: 'יום הולדת (יום.חודש)', width: 'w-32' });
-            localStorage.setItem('phonebook_schema', JSON.stringify(schema)); // עדכון הזיכרון
-        }
-        setPhonebookSchema(schema);
-    }
-  }, []);
+                // אם ה-SQL מחזיר עמודות, נשתמש בהן. אם הוא ריק, נשתמש בברירת המחדל.
+                if (json.schema && json.schema.length > 0) {
+                    setPhonebookSchema(json.schema);
+                }
+                if (json.data) {
+                    setPhonebookData(json.data);
+                }
+            } catch (error) {
+                console.error("שגיאה בטעינת ספר טלפונים:", error);
+            }
+        };
+        loadPhonebook();
+    }, []);
 
     // שמירת נתונים
-    const savePhonebookData = (newData: any[]) => {
+    const savePhonebookData = async (newData: any) => {
         setPhonebookData(newData);
-        localStorage.setItem('phonebook_data', JSON.stringify(newData));
+        await fetch('/api/phonebook', {
+            method: 'POST',
+            body: JSON.stringify({ type: 'data', payload: newData })
+        });
     };
 
-    // שמירת מבנה העמודות
-    const savePhonebookSchema = (newSchema: any[]) => {
+    // שמירת מבנה
+    const savePhonebookSchema = async (newSchema: any) => {
         setPhonebookSchema(newSchema);
-        localStorage.setItem('phonebook_schema', JSON.stringify(newSchema));
+        await fetch('/api/phonebook', {
+            method: 'POST',
+            body: JSON.stringify({ type: 'schema', payload: newSchema })
+        });
     };
-
     const addColumn = () => {
         const newKey = `col_${Date.now()}`;
         savePhonebookSchema([...phonebookSchema, { key: newKey, label: "" }]);
@@ -459,79 +464,79 @@ export default function DynamicIPIDashboard() {
         { key: 'birthday', label: 'יום הולדת (יום.חודש)', width: 'w-32' },
     ]);
 
-   // --- לוגיקת ימי הולדת (עם תיעדוף ל"היום" בראש הרשימה) ---
-  const getBirthdayCelebrants = () => {
-      const today = new Date();
-      const currentMonth = today.getMonth() + 1;
-      const currentDay = today.getDate();
+    // --- לוגיקת ימי הולדת (עם תיעדוף ל"היום" בראש הרשימה) ---
+    const getBirthdayCelebrants = () => {
+        const today = new Date();
+        const currentMonth = today.getMonth() + 1;
+        const currentDay = today.getDate();
 
-      return phonebookData.filter(row => {
-          if (!row.birthday) return false;
-          // תמיכה בפורמטים 15.5, 15/05, 15.05.1990
-          const parts = row.birthday.split(/[\.\/]/); 
-          if (parts.length < 2) return false;
-          
-          const month = parseInt(parts[1]);
-          return month === currentMonth;
-      }).map(row => {
-          const parts = row.birthday.split(/[\.\/]/);
-          const day = parseInt(parts[0]);
-          const isToday = day === currentDay;
-          return { ...row, isToday, day };
-      }).sort((a, b) => {
-          // חוק 1: מי שיש לו יום הולדת היום - עולה למעלה
-          if (a.isToday && !b.isToday) return -1;
-          if (!a.isToday && b.isToday) return 1;
-          
-          // חוק 2: כל השאר מסודרים לפי היום בחודש
-          return a.day - b.day;
-      });
-  };
+        return phonebookData.filter(row => {
+            if (!row.birthday) return false;
+            // תמיכה בפורמטים 15.5, 15/05, 15.05.1990
+            const parts = row.birthday.split(/[\.\/]/);
+            if (parts.length < 2) return false;
+
+            const month = parseInt(parts[1]);
+            return month === currentMonth;
+        }).map(row => {
+            const parts = row.birthday.split(/[\.\/]/);
+            const day = parseInt(parts[0]);
+            const isToday = day === currentDay;
+            return { ...row, isToday, day };
+        }).sort((a, b) => {
+            // חוק 1: מי שיש לו יום הולדת היום - עולה למעלה
+            if (a.isToday && !b.isToday) return -1;
+            if (!a.isToday && b.isToday) return 1;
+
+            // חוק 2: כל השאר מסודרים לפי היום בחודש
+            return a.day - b.day;
+        });
+    };
     const birthdayCelebrants = getBirthdayCelebrants();
 
-  // --- רכיב באנר ימי הולדת (מיקום מתוקן - מקביל לכרטיסיות) ---
-  const BirthdayTicker = () => {
-      if (birthdayCelebrants.length === 0) return null;
+    // --- רכיב באנר ימי הולדת (מיקום מתוקן - מקביל לכרטיסיות) ---
+    const BirthdayTicker = () => {
+        if (birthdayCelebrants.length === 0) return null;
 
-      return (
-          // שיניתי כאן ל- top-64 כדי להוריד אותו למטה לגובה הכרטיסיות
-          <div className="absolute left-8 top-64 z-0 w-72 hidden 2xl:block animate-in fade-in slide-in-from-left-10 duration-1000">
-              <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-pink-100 overflow-hidden relative">
-                  {/* כותרת */}
-                  <div className="bg-gradient-to-r from-pink-500 to-rose-400 p-4 text-center">
-                      <h3 className="text-white font-black text-xl flex justify-center items-center gap-2">
-                          <Gift size={24} className="animate-bounce"/>
-                          חוגגים החודש!
-                      </h3>
-                  </div>
+        return (
+            // שיניתי כאן ל- top-64 כדי להוריד אותו למטה לגובה הכרטיסיות
+            <div className="absolute left-8 top-64 z-0 w-72 hidden 2xl:block animate-in fade-in slide-in-from-left-10 duration-1000">
+                <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-pink-100 overflow-hidden relative">
+                    {/* כותרת */}
+                    <div className="bg-gradient-to-r from-pink-500 to-rose-400 p-4 text-center">
+                        <h3 className="text-white font-black text-xl flex justify-center items-center gap-2">
+                            <Gift size={24} className="animate-bounce" />
+                            חוגגים החודש!
+                        </h3>
+                    </div>
 
-                  {/* רשימת חוגגים */}
-                  <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto no-scrollbar">
-                      {birthdayCelebrants.map((person, idx) => (
-                          <div key={idx} className={`
+                    {/* רשימת חוגגים */}
+                    <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto no-scrollbar">
+                        {birthdayCelebrants.map((person, idx) => (
+                            <div key={idx} className={`
                               relative p-3 rounded-2xl border transition-all duration-500
-                              ${person.isToday 
-                                  ? 'bg-gradient-to-br from-yellow-50 to-amber-50 border-amber-300 shadow-md scale-105' 
-                                  : 'bg-white border-slate-100'}
+                              ${person.isToday
+                                    ? 'bg-gradient-to-br from-yellow-50 to-amber-50 border-amber-300 shadow-md scale-105'
+                                    : 'bg-white border-slate-100'}
                           `}>
-                              <div className="flex justify-between items-center">
-                                  <div>
-                                      <p className={`font-bold ${person.isToday ? 'text-amber-700 text-lg' : 'text-slate-700'}`}>
-                                          {person.name}
-                                      </p>
-                                      <p className="text-sm text-slate-500 font-mono font-medium mt-0.5 flex items-center gap-1">
-                                          📅 {person.birthday}
-                                      </p>
-                                  </div>
-                                  {person.isToday ? <span className="text-3xl animate-pulse">🎂</span> : <span className="text-2xl opacity-60">🎈</span>}
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-          </div>
-      );
-  };
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <p className={`font-bold ${person.isToday ? 'text-amber-700 text-lg' : 'text-slate-700'}`}>
+                                            {person.name}
+                                        </p>
+                                        <p className="text-sm text-slate-500 font-mono font-medium mt-0.5 flex items-center gap-1">
+                                            📅 {person.birthday}
+                                        </p>
+                                    </div>
+                                    {person.isToday ? <span className="text-3xl animate-pulse">🎂</span> : <span className="text-2xl opacity-60">🎈</span>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     // ==================== RENDER ====================
     return (
@@ -623,7 +628,7 @@ export default function DynamicIPIDashboard() {
                                         ? rawTitle
                                         : (rawTitle ? "(תוכן מורכב)" : "ללא כותרת");
 
-                                    
+
                                     return (
                                         <div
                                             key={item.id}
@@ -815,9 +820,9 @@ export default function DynamicIPIDashboard() {
                         )}
                     </div>
                 </div>
-                
-                
-                   {isEditMode && (
+
+
+                {isEditMode && (
                     <div className="text-center mt-24 pt-12 border-t border-slate-200">
                         <button onClick={() => { setShowCreateSectionModal(true); setNewSectionFields([{ key: 'f_title', label: 'כותרת ראשית (חובה)', type: 'text' }]); }} className="bg-slate-900 text-white px-12 py-6 rounded-3xl font-black text-xl cursor-pointer shadow-xl hover:scale-105 transition-transform flex items-center gap-4 mx-auto">
                             <Plus size={28} /> צור קטגוריה חדשה
