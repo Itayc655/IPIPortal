@@ -22,7 +22,61 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+function SortableRow({ row, phonebookSchema, isPhonebookEditMode, updatePhonebookCell, deletePhonebookRow }: any) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
 
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : 0,
+        position: 'relative' as 'relative',
+    };
+
+    return (
+        <tr ref={setNodeRef} style={style} className={`
+            group transition-all duration-500 ease-in-out
+            bg-white rounded-[1.5rem] border-2 border-slate-50
+            shadow-sm hover:shadow-xl hover:shadow-amber-200/20
+            ${isDragging ? 'opacity-50 shadow-2xl scale-[1.02] z-50' : ''}
+            hover:border-transparent hover:bg-gradient-to-l hover:from-amber-400 hover:to-yellow-500
+            hover:-translate-y-1.5 cursor-default
+        `}>
+            {/* כפתור גרירה - מופיע רק בעריכה */}
+            {isPhonebookEditMode && (
+                <td className="px-2 py-5 text-center first:rounded-r-[1.5rem]">
+                    <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-amber-700 p-2 outline-none">
+                        <GripVertical size={20} />
+                    </div>
+                </td>
+            )}
+
+            {phonebookSchema.filter((col: any) => isPhonebookEditMode || col.key !== 'birthday').map((col: any) => (
+                <td key={col.key} className={`px-6 py-5 ${!isPhonebookEditMode && 'first:rounded-r-[1.5rem]'} last:rounded-l-[1.5rem]`}>
+                    {isPhonebookEditMode ? (
+                        <input
+                            value={row[col.key] || ''}
+                            onChange={e => updatePhonebookCell(row.id, col.key, e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 focus:bg-white focus:ring-4 focus:ring-amber-100 outline-none font-bold text-slate-800 transition-all"
+                            placeholder={col.key === 'birthday' ? '24.02' : ''}
+                        />
+                    ) : (
+                        <span className="text-lg font-extrabold text-slate-700 group-hover:text-white transition-colors duration-300">
+                            {row[col.key] || '---'}
+                        </span>
+                    )}
+                </td>
+            ))}
+
+            {isPhonebookEditMode && (
+                <td className="px-6 py-4 text-left rounded-l-[1.5rem]">
+                    <button onClick={() => deletePhonebookRow(row.id)} className="bg-red-50 text-red-500 hover:bg-white p-3 rounded-xl transition-all shadow-sm cursor-pointer">
+                        <Trash2 size={20} />
+                    </button>
+                </td>
+            )}
+        </tr>
+    );
+}
 function SortableField({ field, idx, updateFieldInSchema, removeFieldFromSchema }: any) {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: field.key });
     const style = { transform: CSS.Transform.toString(transform), transition };
@@ -67,6 +121,8 @@ function SortableField({ field, idx, updateFieldInSchema, removeFieldFromSchema 
 }
 
 export default function DynamicIPIDashboard() {
+    const [phonebookSearch, setPhonebookSearch] = useState("");
+
     // ==================== STATE ====================
     const [sections, setSections] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
@@ -251,6 +307,15 @@ export default function DynamicIPIDashboard() {
         setTimeout(() => setCopiedField(null), 2000);
     };
 
+    const handlePhonebookDragEnd = (event: any) => {
+        const { active, over } = event;
+        if (active.id !== over.id) {
+            const oldIndex = phonebookData.findIndex((row) => row.id === active.id);
+            const newIndex = phonebookData.findIndex((row) => row.id === over.id);
+            const newData = arrayMove(phonebookData, oldIndex, newIndex);
+            savePhonebookData(newData); // זה גם יעדכן את ה-State וגם ישלח ל-API
+        }
+    };
     const getColorClasses = (color: string) => {
         const map: any = {
             red: { bg: 'bg-red-500', light: 'bg-red-50', text: 'text-red-600', border: 'border-red-200' },
@@ -741,17 +806,29 @@ export default function DynamicIPIDashboard() {
                             <p className="text-slate-500 font-medium mr-4">ניהול רשימת קשר ומידע מחלקתי</p>
                         </div>
 
-                        {isEditMode && (
-                            <button
-                                onClick={() => setIsPhonebookEditMode(!isPhonebookEditMode)}
-                                className={`flex items-center gap-2 px-6 py-3 cursor-pointer rounded-2xl font-bold transition-all shadow-lg ${isPhonebookEditMode ? 'bg-slate-900 text-amber-400' : 'bg-white text-slate-600 border border-slate-100 hover:bg-slate-50'}`}
-                            >
-                                {isPhonebookEditMode ? <Check size={20} /> : <Edit size={20} />}
-                                {isPhonebookEditMode ? 'שמור שינויים' : 'ערוך טבלה'}
-                            </button>
-                        )}
-                    </div>
+                        {/* --- רכיב החיפוש החדש --- */}
+                        <div className="flex gap-4 items-center">
+                            <div className="relative">
+                                <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                <input
+                                    className="bg-white border border-slate-200 pr-11 pl-4 py-2.5 rounded-2xl outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all w-64 font-bold text-slate-700"
+                                    placeholder="חיפוש מהיר בטבלה..."
+                                    value={phonebookSearch}
+                                    onChange={(e) => setPhonebookSearch(e.target.value)}
+                                />
+                            </div>
 
+                            {isEditMode && (
+                                <button
+                                    onClick={() => setIsPhonebookEditMode(!isPhonebookEditMode)}
+                                    className={`flex items-center gap-2 px-6 py-3 cursor-pointer rounded-2xl font-bold transition-all shadow-lg ${isPhonebookEditMode ? 'bg-slate-900 text-amber-400' : 'bg-white text-slate-600 border border-slate-100 hover:bg-slate-50'}`}
+                                >
+                                    {isPhonebookEditMode ? <Check size={20} /> : <Edit size={20} />}
+                                    {isPhonebookEditMode ? 'שמור שינויים' : 'ערוך טבלה'}
+                                </button>
+                            )}
+                        </div>
+                    </div>
                     {/* גוף הטבלה */}
                     <div className={`
             max-w-7xl mx-auto
@@ -764,6 +841,9 @@ export default function DynamicIPIDashboard() {
                             <table className="w-full text-right border-separate border-spacing-y-3 px-6 py-6">
                                 <thead>
                                     <tr className="text-amber-700">
+                                        {isPhonebookEditMode && <th className="w-12"></th>}
+
+
                                         {/* לוגיקה חכמה: מסננים את יום ההולדת אם לא עורכים */}
                                         {phonebookSchema.filter(col => isPhonebookEditMode || col.key !== 'birthday').map(col => (
                                             <th key={col.key} className="px-6 py-4 text-xl font-black uppercase tracking-tight">
@@ -788,46 +868,40 @@ export default function DynamicIPIDashboard() {
                                 </thead>
 
                                 <tbody>
-                                    {phonebookData.length === 0 ? (
-                                        <tr><td colSpan={10} className="text-center py-20 text-slate-300 font-bold text-xl italic">אין רשומות להצגה...</td></tr>
-                                    ) : (
-                                        phonebookData.map((row) => (
-                                            <tr key={row.id} className="
-                        group transition-all duration-500 ease-in-out
-                        bg-white rounded-[1.5rem] border-2 border-slate-50
-                        shadow-sm hover:shadow-xl hover:shadow-amber-200/20
-                        hover:border-transparent hover:bg-gradient-to-l hover:from-amber-400 hover:to-yellow-500
-                        hover:-translate-y-1.5 cursor-default
-                    ">
-                                                {/* לוגיקה חכמה גם כאן: מסננים את יום ההולדת אם לא עורכים */}
-                                                {phonebookSchema.filter(col => isPhonebookEditMode || col.key !== 'birthday').map(col => (
-                                                    <td key={col.key} className="px-6 py-5 first:rounded-r-[1.5rem] last:rounded-l-[1.5rem]">
-                                                        {isPhonebookEditMode ? (
-                                                            <input
-                                                                value={row[col.key] || ''}
-                                                                onChange={e => updatePhonebookCell(row.id, col.key, e.target.value)}
-                                                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 focus:bg-white focus:ring-4 focus:ring-amber-100 outline-none font-bold text-slate-800 transition-all"
-                                                                placeholder={col.key === 'birthday' ? 'לדוגמה: 24.02' : ''}
-                                                            />
-                                                        ) : (
-                                                            <span className="text-lg font-extrabold text-slate-700 group-hover:text-white transition-colors duration-300">
-                                                                {typeof row[col.key] === 'object' ? '' : (row[col.key] || '---')}
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                ))}
+                                    {(() => {
+                                        // סינון השורות לפי החיפוש
+                                        const filteredRows = phonebookData.filter(row => {
+                                            if (!phonebookSearch) return true;
+                                            return Object.values(row).some(val =>
+                                                String(val).toLowerCase().includes(phonebookSearch.toLowerCase())
+                                            );
+                                        });
 
-                                                {isPhonebookEditMode && (
-                                                    <td className="px-6 py-4 text-left rounded-l-[1.5rem]">
-                                                        <button onClick={() => deletePhonebookRow(row.id)} className="bg-red-50 text-red-500 hover:bg-white p-3 rounded-xl transition-all shadow-sm cursor-pointer"><Trash2 size={20} /></button>
-                                                    </td>
-                                                )}
-                                            </tr>
-                                        ))
-                                    )}
+                                        if (filteredRows.length === 0) {
+                                            return <tr><td colSpan={10} className="text-center py-20 text-slate-300 font-bold text-xl italic">לא נמצאו תוצאות לחיפוש...</td></tr>;
+                                        }
+
+                                        return (
+                                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePhonebookDragEnd}>
+                                                <SortableContext items={filteredRows.map(row => row.id)} strategy={verticalListSortingStrategy}>
+                                                    {filteredRows.map((row) => (
+                                                        <SortableRow
+                                                            key={row.id}
+                                                            row={row}
+                                                            phonebookSchema={phonebookSchema}
+                                                            isPhonebookEditMode={isPhonebookEditMode}
+                                                            updatePhonebookCell={updatePhonebookCell}
+                                                            deletePhonebookRow={deletePhonebookRow}
+                                                        />
+                                                    ))}
+                                                </SortableContext>
+                                            </DndContext>
+                                        );
+                                    })()}
                                 </tbody>
                             </table>
                         </div>
+
 
                         {isPhonebookEditMode && (
                             <div className="p-8 border-t border-amber-50 flex justify-center bg-amber-50/30">
