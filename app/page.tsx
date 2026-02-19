@@ -598,24 +598,34 @@ export default function DynamicIPIDashboard() {
 
                     return (
                         <section key={section.id} className="mb-20">
-                            <div className="flex items-center justify-between mb-10">
+                            <div className="flex items-center gap-4 mb-10">
                                 <h2 className={`text-3xl font-black flex items-center gap-4 text-slate-800`}>
                                     <span className={`w-4 h-10 rounded-full ${colors.bg}`}></span>
                                     {section.title} <span className="text-slate-400 font-normal text-2xl">({visibleItems.length})</span>
                                 </h2>
 
                                 {isEditMode && (
-                                    <div className="flex gap-2">
-                                        <button onClick={() => openEditSectionModal(section)} className="p-3 text-slate-300 hover:text-blue-500 cursor-pointer hover:bg-blue-50 rounded-full transition-all" title="ערוך קטגוריה">
-                                            <Edit size={24} />
+                                    <div className="flex gap-2 items-center">
+                                        {/* מחקנו מכאן את absolute ואת left-4! */}
+                                        <button
+                                            onClick={() => openEditSectionModal(section)}
+                                            className="p-2 text-slate-400 hover:text-blue-500 cursor-pointer hover:bg-blue-50 rounded-full transition-all"
+                                            title="ערוך קטגוריה"
+                                        >
+                                            <Edit size={22} />
                                         </button>
-                                        <button onClick={() => handleDeleteSection(section.id)} className="p-3 text-slate-300 hover:text-red-500 cursor-pointer hover:bg-red-50 rounded-full transition-all" title="מחק קטגוריה">
-                                            <Trash2 size={24} />
+
+                                        {/* מחקנו מכאן את absolute ואת left-4! */}
+                                        <button
+                                            onClick={() => handleDeleteSection(section.id)}
+                                            className="p-2 text-slate-400 hover:text-red-500 cursor-pointer hover:bg-red-50 rounded-full transition-all"
+                                            title="מחק קטגוריה"
+                                        >
+                                            <Trash2 size={22} />
                                         </button>
                                     </div>
                                 )}
                             </div>
-
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
                                 {visibleItems.map((item: any) => {
                                     const theme = getCardGradientTheme(section.color);
