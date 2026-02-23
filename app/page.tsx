@@ -1,5 +1,5 @@
 "use client";
-
+import * as XLSX from 'xlsx';
 import React, { useState, useEffect } from 'react';
 import {
     Search, Plus, FileText, Trash2, X, Key, Lock, Unlock, Edit,
@@ -56,7 +56,7 @@ function SortableRow({ row, phonebookSchema, isPhonebookEditMode, updatePhoneboo
                         <input
                             value={row[col.key] || ''}
                             onChange={e => updatePhonebookCell(row.id, col.key, e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 focus:bg-white focus:ring-4 focus:ring-amber-100 outline-none font-bold text-slate-800 transition-all"
+                            className="w-full min-w-[150px] bg-slate-50 border border-slate-100 rounded-xl p-3 focus:bg-white focus:ring-4 focus:ring-amber-100 outline-none font-bold text-slate-800 transition-all"
                             placeholder={col.key === 'birthday' ? '24.02' : ''}
                         />
                     ) : (
@@ -433,12 +433,20 @@ export default function DynamicIPIDashboard() {
                 const res = await fetch('/api/phonebook');
                 const json = await res.json();
 
-                // אם ה-SQL מחזיר עמודות, נשתמש בהן. אם הוא ריק, נשתמש בברירת המחדל.
-                if (json.schema && json.schema.length > 0) {
-                    setPhonebookSchema(json.schema);
-                }
-                if (json.data) {
-                    setPhonebookData(json.data);
+                if (json.data && Array.isArray(json.data)) {
+                    // --- מנגנון ניקוי נתונים בזמן אמת ---
+                    const sanitizedData = json.data.map((row: any) => ({
+                        ...row,
+                        // כפייה של המרת כל השדות לטקסט כדי למנוע את קריסת ה-split
+                        birthday: String(row.birthday || '').trim(),
+                        name: String(row.name || '').trim(),
+                        role: String(row.role || '').trim(),
+                        phone: String(row.phone || '').trim(),
+                        email: String(row.email || '').trim(),
+                        ext: String(row.ext || '').trim()
+                    }));
+
+                    setPhonebookData(sanitizedData);
                 }
             } catch (error) {
                 console.error("שגיאה בטעינת ספר טלפונים:", error);
@@ -447,6 +455,7 @@ export default function DynamicIPIDashboard() {
         loadPhonebook();
     }, []);
 
+    
     // שמירת נתונים
     const savePhonebookData = async (newData: any) => {
         setPhonebookData(newData);
@@ -496,13 +505,78 @@ export default function DynamicIPIDashboard() {
     };
 
     const updatePhonebookCell = (id: number, field: string, value: string) => {
+        // שכפול חכם שגורם ל-React להבין שהיה שינוי ולרענן את התיבה הלבנה
         const updatedData = phonebookData.map(row =>
             row.id === id ? { ...row, [field]: value } : row
         );
-        savePhonebookData(updatedData);
+
+        setPhonebookData(updatedData); // מעדכן את התצוגה באותו חלקיק שנייה
+        savePhonebookData(updatedData); // שומר ל-SQL ברקע
     };
+    const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
 
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = new Uint8Array(event.target?.result as ArrayBuffer);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
 
+                // כפייה על האקסל להביא רק טקסט נקי כדי למנוע קריסה
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: '' });
+
+                // הגדרת הפונקציה שחסרה לך ב-VS Code
+                const getValue = (row: any, possibleKeys: string[]) => {
+                    const actualKey = Object.keys(row).find(key =>
+                        possibleKeys.includes(key.trim())
+                    );
+                    const val = actualKey ? row[actualKey] : '';
+                    // וידוא שהערך תמיד חוזר כטקסט (מונע את שגיאת ה-split)
+                    return String(val || '').trim();
+                };
+
+                const newRows = jsonData.map((row: any) => ({
+                    id: Date.now() + Math.random(),
+                    name: getValue(row, ['שם העובד', 'שם', 'Name']),
+                    role: getValue(row, ['תפקיד', 'Role']),
+                    phone: getValue(row, ['טלפון', 'Phone']),
+                    email: getValue(row, ['מייל', 'Email']),
+                    ext: getValue(row, ['שלוחה', 'Ext']),
+                    birthday: getValue(row, ['יום הולדת', 'תאריך לידה'])
+                }));
+
+                if (!confirm(`האם להחליף את כל ספר הטלפונים ב-${newRows.length} עובדים חדשים?`)) {
+                    e.target.value = '';
+                    return;
+                }
+
+                savePhonebookData(newRows);
+                alert("הנתונים עודכנו בהצלחה!");
+            } catch (error) {
+                console.error("Excel Error:", error);
+                alert("חלה שגיאה בעיבוד הקובץ.");
+            }
+        };
+        reader.readAsArrayBuffer(file);
+        e.target.value = '';
+    };
+    const downloadExcelTemplate = () => {
+        const headers = [{
+            'שם העובד': 'ישראל ישראלי',
+            'תפקיד': 'מנהל',
+            'טלפון': '050-1234567',
+            'מייל': 'test@ipi.co.il',
+            'שלוחה': '101',
+            'יום הולדת': '23.02.2026' // דוגמה לפורמט החדש
+        }];
+
+        const worksheet = XLSX.utils.json_to_sheet(headers);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "תבנית");
+        XLSX.writeFile(workbook, "Phonebook_Template_V1.8.xlsx");
+    };
     // הקפאת גלילה ברקע כאשר מודל פתוח
     useEffect(() => {
         const isAnyModalOpen = showCreateSectionModal || showAddItemModal || viewItem || showSecurityModal;
@@ -520,11 +594,11 @@ export default function DynamicIPIDashboard() {
     // --- ספר טלפונים (כולל ימי הולדת) ---
     const [phonebookData, setPhonebookData] = useState<any[]>([]);
 
-    // הוספנו כאן את ה-birthday באופן קבוע
     const [phonebookSchema, setPhonebookSchema] = useState<{ key: string, label: string, width?: string }[]>([
         { key: 'name', label: 'שם העובד', width: 'w-1/4' },
         { key: 'role', label: 'תפקיד', width: 'w-1/4' },
         { key: 'phone', label: 'טלפון', width: 'w-1/4' },
+        { key: 'email', label: 'מייל', width: 'w-1/4' },
         { key: 'ext', label: 'שלוחה', width: 'w-24' },
         { key: 'birthday', label: 'יום הולדת (יום.חודש)', width: 'w-32' },
     ]);
@@ -841,33 +915,19 @@ export default function DynamicIPIDashboard() {
                             <table className="w-full text-right border-separate border-spacing-y-3 px-6 py-6">
                                 <thead>
                                     <tr className="text-amber-700">
-                                        {isPhonebookEditMode && <th className="w-12"></th>}
-
-
-                                        {/* לוגיקה חכמה: מסננים את יום ההולדת אם לא עורכים */}
                                         {phonebookSchema.filter(col => isPhonebookEditMode || col.key !== 'birthday').map(col => (
-                                            <th key={col.key} className="px-6 py-4 text-xl font-black uppercase tracking-tight">
+                                            <th key={col.key} className="px-6 py-4 text-xl font-black uppercase tracking-tight text-right">
                                                 <div className="flex items-center gap-2 group/col">
-                                                    {isPhonebookEditMode ? (
-                                                        <div className="flex items-center gap-2 w-full">
-                                                            <input
-                                                                value={col.label}
-                                                                onChange={(e) => updateColumnTitle(col.key, e.target.value)}
-                                                                className="bg-amber-100/50 border-b-2 border-amber-400 focus:border-amber-600 outline-none w-full py-2 font-black text-amber-900 rounded px-2 text-lg"
-                                                            />
-                                                            <button onClick={() => removeColumn(col.key)} className="text-amber-400 hover:text-red-500 transition-colors shrink-0 cursor-pointer"><X size={20} /></button>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="drop-shadow-sm">{col.label}</span>
-                                                    )}
+                                                    <span className="drop-shadow-sm">{col.label}</span>
                                                 </div>
                                             </th>
                                         ))}
-                                        {isPhonebookEditMode && <th className="w-16 text-center"><button onClick={addColumn} className="bg-amber-600 text-white cursor-pointer p-2.5 rounded-xl hover:bg-amber-700 transition-all shadow-md"><Plus size={22} /></button></th>}
+                                        {/* העמודה הריקה הזו שומרת מקום לפח האשפה כדי שהכותרות לא יזוזו! */}
+                                        {isPhonebookEditMode && <th className="w-16"></th>}
                                     </tr>
                                 </thead>
-
                                 <tbody>
+
                                     {(() => {
                                         // סינון השורות לפי החיפוש
                                         const filteredRows = phonebookData.filter(row => {
@@ -902,11 +962,27 @@ export default function DynamicIPIDashboard() {
                             </table>
                         </div>
 
-
                         {isPhonebookEditMode && (
-                            <div className="p-8 border-t border-amber-50 flex justify-center bg-amber-50/30">
-                                <button onClick={addPhonebookRow} className="flex items-center gap-3 cursor-pointer text-white font-black bg-slate-900 px-12 py-5 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-2xl">
-                                    <Plus size={24} /> הוסף עובד חדש
+                            <div className="p-8 border-t border-amber-50 flex justify-center gap-4 bg-amber-50/30 flex-wrap">
+                                {/* 1. כפתור הוספה רגיל */}
+                                <button onClick={addPhonebookRow} className="flex items-center gap-3 cursor-pointer text-white font-black bg-slate-900 px-8 py-4 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-xl">
+                                    <Plus size={20} /> הוסף ידנית
+                                </button>
+
+                                {/* 2. כפתור העלאת אקסל */}
+                                <label className="flex items-center gap-3 cursor-pointer text-slate-900 font-black bg-amber-400 px-8 py-4 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-xl">
+                                    <Upload size={20} /> ייבא מאקסל
+                                    <input
+                                        type="file"
+                                        accept=".xlsx, .xls, .csv"
+                                        className="hidden"
+                                        onChange={handleExcelUpload}
+                                    />
+                                </label>
+
+                                {/* 3. כפתור הורדת תבנית */}
+                                <button onClick={downloadExcelTemplate} className="flex items-center gap-3 cursor-pointer text-amber-800 font-black bg-amber-100 border-2 border-amber-200 px-8 py-4 rounded-[2rem] hover:bg-amber-200 hover:scale-105 transition-all shadow-sm">
+                                    <Download size={20} /> הורד תבנית
                                 </button>
                             </div>
                         )}
