@@ -11,6 +11,9 @@ const assistant = Assistant({
 export const metadata: Metadata = {
   title: "IPI PORTAL",
   description: "מערכת לשימור ידע בחברה",
+  icons: {
+    icon: '/favicon.ico?v=2', // התוספת הזו שוברת את המטמון של הדפדפן
+  },
 };
 
 export default function RootLayout({
@@ -25,3 +28,4 @@ export default function RootLayout({
     </html>
   );
 }
+
