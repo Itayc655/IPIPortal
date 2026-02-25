@@ -25,42 +25,27 @@ import { CSS } from '@dnd-kit/utilities';
 function SortableRow({ row, phonebookSchema, isPhonebookEditMode, updatePhonebookCell, deletePhonebookRow }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
 
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        zIndex: isDragging ? 50 : 0,
-        position: 'relative' as 'relative',
-    };
+    const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 0, position: 'relative' as 'relative' };
 
     return (
-        <tr ref={setNodeRef} style={style} className={`
-            group transition-all duration-500 ease-in-out
-            bg-white rounded-[1.5rem] border-2 border-slate-50
-            shadow-sm hover:shadow-xl hover:shadow-amber-200/20
-            ${isDragging ? 'opacity-50 shadow-2xl scale-[1.02] z-50' : ''}
-            hover:border-transparent hover:bg-gradient-to-l hover:from-amber-400 hover:to-yellow-500
-            hover:-translate-y-1.5 cursor-default
-        `}>
-            {/* כפתור גרירה - מופיע רק בעריכה */}
+        <tr ref={setNodeRef} style={style} className={`group transition-all duration-500 ease-in-out bg-white rounded-[1.5rem] border-2 border-slate-50 shadow-sm hover:shadow-xl hover:shadow-amber-200/20 ${isDragging ? 'opacity-50 shadow-2xl scale-[1.02] z-50' : ''} hover:border-transparent hover:bg-gradient-to-l hover:from-amber-400 hover:to-yellow-500 hover:-translate-y-1.5 cursor-default`}>
             {isPhonebookEditMode && (
-                <td className="px-2 py-5 text-center first:rounded-r-[1.5rem]">
-                    <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-amber-700 p-2 outline-none">
-                        <GripVertical size={20} />
-                    </div>
+                <td className="px-1 py-3 text-center first:rounded-r-[1.5rem] w-8">
+                    <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-amber-700 p-1 outline-none"><GripVertical size={18} /></div>
                 </td>
             )}
 
             {phonebookSchema.filter((col: any) => isPhonebookEditMode || col.key !== 'birthday').map((col: any) => (
-                <td key={col.key} className={`px-6 py-5 ${!isPhonebookEditMode && 'first:rounded-r-[1.5rem]'} last:rounded-l-[1.5rem]`}>
+                <td key={col.key} className={`px-2 py-3 2xl:py-5 truncate ${!isPhonebookEditMode && 'first:rounded-r-[1.5rem]'} last:rounded-l-[1.5rem]`}>
                     {isPhonebookEditMode ? (
                         <input
                             value={row[col.key] || ''}
                             onChange={e => updatePhonebookCell(row.id, col.key, e.target.value)}
-                            className="w-full min-w-[150px] bg-slate-50 border border-slate-100 rounded-xl p-3 focus:bg-white focus:ring-4 focus:ring-amber-100 outline-none font-bold text-slate-800 transition-all"
-                            placeholder={col.key === 'birthday' ? '24.02' : ''}
+                            className="w-full min-w-0 bg-slate-50 border border-slate-100 rounded-lg 2xl:rounded-xl p-2 2xl:p-3 text-xs 2xl:text-base focus:bg-white focus:ring-2 focus:ring-amber-100 outline-none font-bold text-slate-800 transition-all"
+                            placeholder={col.label}
                         />
                     ) : (
-                        <span className="text-lg font-extrabold text-slate-700 group-hover:text-white transition-colors duration-300">
+                        <span className="text-sm 2xl:text-lg font-bold text-slate-700 group-hover:text-white transition-colors duration-300 block truncate">
                             {row[col.key] || '---'}
                         </span>
                     )}
@@ -68,10 +53,8 @@ function SortableRow({ row, phonebookSchema, isPhonebookEditMode, updatePhoneboo
             ))}
 
             {isPhonebookEditMode && (
-                <td className="px-6 py-4 text-left rounded-l-[1.5rem]">
-                    <button onClick={() => deletePhonebookRow(row.id)} className="bg-red-50 text-red-500 hover:bg-white p-3 rounded-xl transition-all shadow-sm cursor-pointer">
-                        <Trash2 size={20} />
-                    </button>
+                <td className="px-2 py-3 text-left rounded-l-[1.5rem] w-12">
+                    <button onClick={() => deletePhonebookRow(row.id)} className="bg-red-50 text-red-500 hover:bg-white p-2 rounded-lg transition-all shadow-sm cursor-pointer"><Trash2 size={18} /></button>
                 </td>
             )}
         </tr>
@@ -455,7 +438,7 @@ export default function DynamicIPIDashboard() {
         loadPhonebook();
     }, []);
 
-    
+
     // שמירת נתונים
     const savePhonebookData = async (newData: any) => {
         setPhonebookData(newData);
@@ -537,8 +520,9 @@ export default function DynamicIPIDashboard() {
                     return String(val || '').trim();
                 };
 
-                const newRows = jsonData.map((row: any) => ({
-                    id: Date.now() + Math.random(),
+                // 1. קודם כל מייצרים את כל השורות
+                const rawRows = jsonData.map((row: any) => ({
+                    id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), // הפכתי את ה-ID לטקסט בטוח יותר למסדי נתונים
                     name: getValue(row, ['שם העובד', 'שם', 'Name']),
                     role: getValue(row, ['תפקיד', 'Role']),
                     phone: getValue(row, ['טלפון', 'Phone']),
@@ -547,12 +531,16 @@ export default function DynamicIPIDashboard() {
                     birthday: getValue(row, ['יום הולדת', 'תאריך לידה'])
                 }));
 
-                if (!confirm(`האם להחליף את כל ספר הטלפונים ב-${newRows.length} עובדים חדשים?`)) {
+                // 2. הסינון הקריטי: שומרים רק שורות שיש בהן שם עובד
+                const validRows = rawRows.filter(row => row.name !== '');
+
+                // 3. משתמשים רק בשורות התקינות מעכשיו והלאה
+                if (!confirm(`האם להחליף את כל ספר הטלפונים ב-${validRows.length} עובדים חדשים? (סוננו ${rawRows.length - validRows.length} שורות ריקות)`)) {
                     e.target.value = '';
                     return;
                 }
 
-                savePhonebookData(newRows);
+                savePhonebookData(validRows);
                 alert("הנתונים עודכנו בהצלחה!");
             } catch (error) {
                 console.error("Excel Error:", error);
@@ -595,12 +583,12 @@ export default function DynamicIPIDashboard() {
     const [phonebookData, setPhonebookData] = useState<any[]>([]);
 
     const [phonebookSchema, setPhonebookSchema] = useState<{ key: string, label: string, width?: string }[]>([
-        { key: 'name', label: 'שם העובד', width: 'w-1/4' },
-        { key: 'role', label: 'תפקיד', width: 'w-1/4' },
-        { key: 'phone', label: 'טלפון', width: 'w-1/4' },
-        { key: 'email', label: 'מייל', width: 'w-1/4' },
-        { key: 'ext', label: 'שלוחה', width: 'w-24' },
-        { key: 'birthday', label: 'יום הולדת (יום.חודש)', width: 'w-32' },
+        { key: 'name', label: 'שם העובד', width: 'w-[15%]' },
+        { key: 'role', label: 'תפקיד', width: 'w-[15%]' },
+        { key: 'phone', label: 'טלפון', width: 'w-[15%]' },
+        { key: 'email', label: 'מייל', width: 'w-[25%]' },
+        { key: 'ext', label: 'שלוחה', width: 'w-[10%]' },
+        { key: 'birthday', label: 'יום הולדת', width: 'w-[15%]' },
     ]);
 
     // --- לוגיקת ימי הולדת (עם תיעדוף ל"היום" בראש הרשימה) ---
@@ -632,42 +620,26 @@ export default function DynamicIPIDashboard() {
         });
     };
     const birthdayCelebrants = getBirthdayCelebrants();
-
-    // --- רכיב באנר ימי הולדת (מיקום מתוקן - מקביל לכרטיסיות) ---
     const BirthdayTicker = () => {
         if (birthdayCelebrants.length === 0) return null;
 
         return (
-            // שיניתי כאן ל- top-64 כדי להוריד אותו למטה לגובה הכרטיסיות
-            <div className="absolute left-8 top-64 z-0 w-72 hidden 2xl:block animate-in fade-in slide-in-from-left-10 duration-1000">
+            <div className="absolute left-4 xl:left-6 2xl:left-8 top-48 lg:top-56 2xl:top-64 z-10 w-60 2xl:w-72 hidden lg:block animate-in fade-in slide-in-from-left-10 duration-1000 origin-top-left">
                 <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-pink-100 overflow-hidden relative">
-                    {/* כותרת */}
-                    <div className="bg-gradient-to-r from-pink-500 to-rose-400 p-4 text-center">
-                        <h3 className="text-white font-black text-xl flex justify-center items-center gap-2">
-                            <Gift size={24} className="animate-bounce" />
-                            חוגגים החודש!
+                    <div className="bg-gradient-to-r from-pink-500 to-rose-400 p-3 2xl:p-4 text-center">
+                        <h3 className="text-white font-black text-lg 2xl:text-xl flex justify-center items-center gap-2">
+                            <Gift size={20} className="animate-bounce 2xl:w-6 2xl:h-6" /> חוגגים החודש!
                         </h3>
                     </div>
-
-                    {/* רשימת חוגגים */}
-                    <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto no-scrollbar">
+                    <div className="p-3 2xl:p-4 space-y-2 2xl:space-y-3 max-h-[400px] 2xl:max-h-[500px] overflow-y-auto no-scrollbar">
                         {birthdayCelebrants.map((person, idx) => (
-                            <div key={idx} className={`
-                              relative p-3 rounded-2xl border transition-all duration-500
-                              ${person.isToday
-                                    ? 'bg-gradient-to-br from-yellow-50 to-amber-50 border-amber-300 shadow-md scale-105'
-                                    : 'bg-white border-slate-100'}
-                          `}>
+                            <div key={idx} className={`relative p-2 2xl:p-3 rounded-2xl border transition-all duration-500 ${person.isToday ? 'bg-gradient-to-br from-yellow-50 to-amber-50 border-amber-300 shadow-md scale-105' : 'bg-white border-slate-100'}`}>
                                 <div className="flex justify-between items-center">
                                     <div>
-                                        <p className={`font-bold ${person.isToday ? 'text-amber-700 text-lg' : 'text-slate-700'}`}>
-                                            {person.name}
-                                        </p>
-                                        <p className="text-sm text-slate-500 font-mono font-medium mt-0.5 flex items-center gap-1">
-                                            📅 {person.birthday}
-                                        </p>
+                                        <p className={`font-bold ${person.isToday ? 'text-amber-700 text-base 2xl:text-lg' : 'text-slate-700 text-sm 2xl:text-base'}`}>{person.name}</p>
+                                        <p className="text-xs 2xl:text-sm text-slate-500 font-mono font-medium mt-0.5 flex items-center gap-1">📅 {person.birthday}</p>
                                     </div>
-                                    {person.isToday ? <span className="text-3xl animate-pulse">🎂</span> : <span className="text-2xl opacity-60">🎈</span>}
+                                    {person.isToday ? <span className="text-2xl 2xl:text-3xl animate-pulse">🎂</span> : <span className="text-xl 2xl:text-2xl opacity-60">🎈</span>}
                                 </div>
                             </div>
                         ))}
@@ -676,53 +648,55 @@ export default function DynamicIPIDashboard() {
             </div>
         );
     };
-
     // ==================== RENDER ====================
     return (
         <div className="font-sans min-h-screen relative bg-slate-50 text-slate-900" dir="rtl">
+
             <BirthdayTicker />
 
-            {/* HEADER */}
-            <header className="max-w-7xl mx-auto px-6 py-10 flex justify-between items-center">
-                <div className="flex items-center gap-5">
-                    <div className="bg-red-600 p-5 rounded-3xl shadow-lg shadow-red-500/20">
-                        <div className="text-white font-black text-5xl tracking-tighter px-2">IPI</div>
+            {/* HEADER - מותאם למצב לפטופ ותואם למסך גדול */}
+            <header className="max-w-7xl mx-auto px-4 2xl:px-6 py-4 2xl:py-10 flex justify-between items-center">
+                <div className="flex items-center gap-3 2xl:gap-5">
+                    {/* הקטנת הריבוע של הלוגו בלפטופ */}
+                    <div className="bg-red-600 p-3 2xl:p-5 rounded-2xl 2xl:rounded-3xl shadow-lg shadow-red-500/20">
+                        <div className="text-white font-black text-3xl 2xl:text-5xl tracking-tighter px-1 2xl:px-2">IPI</div>
                     </div>
                     <div className="hidden md:block">
-                        <h1 className="text-3xl font-extrabold text-red-600 tracking-tight">פורטל</h1>
-                        <p className="text-sm text-slate-500 font-medium mt-1">IPI Portal</p>
+                        <h1 className="text-xl 2xl:text-3xl font-extrabold text-red-600 tracking-tight">פורטל</h1>
+                        <p className="text-xs 2xl:text-sm text-slate-500 font-medium mt-0.5 2xl:mt-1">IPI Portal</p>
                     </div>
                 </div>
+
+                {/* התאמת הכפתור (הטוגל) למידות לפטופ */}
                 <button
                     onClick={() => {
                         if (isEditMode) {
-                            // אם אנחנו יוצאים ממצב עריכה
                             setIsEditMode(false);
-                            setIsPhonebookEditMode(false); // <--- הוסף את השורה הזו כאן
+                            setIsPhonebookEditMode(false);
                         } else {
                             setShowLoginModal(true);
                         }
                     }}
-                    className={`flex items-center gap-3 px-6 py-3 rounded-full font-bold text-base cursor-pointer transition-all border shadow-sm 
+                    className={`flex items-center gap-2 2xl:gap-3 px-4 2xl:px-6 py-2 2xl:py-3 rounded-full font-bold text-sm 2xl:text-base cursor-pointer transition-all border shadow-sm 
                         ${isEditMode
                             ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 hover:border-red-300 hover:text-red-700'
                             : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300'
                         }`}
                 >
-                    {isEditMode ? <Unlock size={20} /> : <Lock size={20} />}
+                    {isEditMode ? <Unlock size={18} className="2xl:w-5 2xl:h-5" /> : <Lock size={18} className="2xl:w-5 2xl:h-5" />}
                     {isEditMode ? 'עריכה פעילה' : 'צפייה'}
                 </button>
             </header>
 
             {/* MAIN CONTENT */}
-            <main className="max-w-7xl mx-auto px-6 pb-32">
+            <main className="w-full max-w-[1800px] mx-auto px-4 lg:px-6 pb-32">
 
                 {/* SEARCH */}
-                <section className="mt-10 mb-24 relative text-center">
-                    <h2 className="text-5xl font-black mb-8 tracking-tight">מרכז המידע והנהלים</h2>
-                    <div className="max-w-3xl mx-auto relative">
-                        <Search className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400" size={28} />
-                        <input className="w-full pr-16 pl-6 py-6 rounded-3xl border-none shadow-2xl text-xl font-medium outline-none focus:ring-4 focus:ring-red-600/10 transition-all" placeholder="חפש מוצרים, סיסמאות או נהלים..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                <section className="mt-4 2xl:mt-10 mb-8 2xl:mb-24 relative text-center">
+                    <h2 className="text-3xl 2xl:text-5xl font-black mb-4 2xl:mb-8 tracking-tight">מרכז המידע והנהלים</h2>
+                    <div className="max-w-2xl 2xl:max-w-3xl mx-auto relative">
+                        <Search className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 2xl:w-7 2xl:h-7" />
+                        <input className="w-full pr-14 2xl:pr-16 pl-6 py-3 2xl:py-6 rounded-2xl 2xl:rounded-3xl border-none shadow-xl 2xl:shadow-2xl text-base 2xl:text-xl font-medium outline-none focus:ring-4 focus:ring-red-600/10 transition-all" placeholder="חפש מוצרים, סיסמאות או נהלים..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                     </div>
                 </section>
 
@@ -734,7 +708,7 @@ export default function DynamicIPIDashboard() {
                         if (!searchTerm) return true;
                         // חיפוש מותאם גם לקבצים
                         return Object.entries(item.data).some(([key, val]: any) => {
-                            if (Array.isArray(val)) { // חיפוש בתוך מערך קבצים
+                            if (Array.isArray(val)) {
                                 return val.some((f: any) => f.name.toLowerCase().includes(searchTerm.toLowerCase()));
                             }
                             return typeof val === 'string' && val.toLowerCase().includes(searchTerm.toLowerCase());
@@ -744,79 +718,71 @@ export default function DynamicIPIDashboard() {
                     if (!isEditMode && visibleItems.length === 0) return null;
 
                     return (
-                        <section key={section.id} className="mb-20">
-                            <div className="flex items-center gap-4 mb-10">
-                                <h2 className={`text-3xl font-black flex items-center gap-4 text-slate-800`}>
-                                    <span className={`w-4 h-10 rounded-full ${colors.bg}`}></span>
-                                    {section.title} <span className="text-slate-400 font-normal text-2xl">({visibleItems.length})</span>
+                        <section key={section.id} className="mb-12 2xl:mb-20 lg:pl-[270px] xl:pl-[290px] 2xl:pl-[320px]">
+                            <div className="flex items-center gap-3 2xl:gap-4 mb-6 2xl:mb-10">
+                                <h2 className={`text-2xl 2xl:text-3xl font-black flex items-center gap-3 2xl:gap-4 text-slate-800`}>
+                                    <span className={`w-3 2xl:w-4 h-8 2xl:h-10 rounded-full ${colors.bg}`}></span>
+                                    {section.title} <span className="text-slate-400 font-normal text-xl 2xl:text-2xl">({visibleItems.length})</span>
                                 </h2>
 
                                 {isEditMode && (
                                     <div className="flex gap-2 items-center">
-                                        {/* מחקנו מכאן את absolute ואת left-4! */}
                                         <button
                                             onClick={() => openEditSectionModal(section)}
-                                            className="p-2 text-slate-400 hover:text-blue-500 cursor-pointer hover:bg-blue-50 rounded-full transition-all"
+                                            className="p-1.5 2xl:p-2 text-slate-400 hover:text-blue-500 cursor-pointer hover:bg-blue-50 rounded-full transition-all"
                                             title="ערוך קטגוריה"
                                         >
-                                            <Edit size={22} />
+                                            <Edit size={20} className="2xl:w-[22px] 2xl:h-[22px]" />
                                         </button>
 
-                                        {/* מחקנו מכאן את absolute ואת left-4! */}
                                         <button
                                             onClick={() => handleDeleteSection(section.id)}
-                                            className="p-2 text-slate-400 hover:text-red-500 cursor-pointer hover:bg-red-50 rounded-full transition-all"
+                                            className="p-1.5 2xl:p-2 text-slate-400 hover:text-red-500 cursor-pointer hover:bg-red-50 rounded-full transition-all"
                                             title="מחק קטגוריה"
                                         >
-                                            <Trash2 size={22} />
+                                            <Trash2 size={20} className="2xl:w-[22px] 2xl:h-[22px]" />
                                         </button>
                                     </div>
                                 )}
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+
+                            {/* כיווץ הרווחים ב-Grid ללפטופ (gap-4) */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 2xl:gap-8">
                                 {visibleItems.map((item: any) => {
                                     const theme = getCardGradientTheme(section.color);
-
-                                    // --- הגנות למניעת קריסה ---
-                                    // שליפת הכותרת
                                     const rawTitle = item.data[section.schema[0]?.key];
-                                    // בדיקה: אם הכותרת היא אובייקט/מערך (כמו ספר טלפונים) - הצג טקסט חלופי
                                     const displayTitle = (typeof rawTitle === 'string' || typeof rawTitle === 'number')
                                         ? rawTitle
                                         : (rawTitle ? "(תוכן מורכב)" : "ללא כותרת");
-
 
                                     return (
                                         <div
                                             key={item.id}
                                             onClick={() => setViewItem({ item, section })}
                                             className={`
-                                                relative group flex flex-col items-center justify-center text-center h-[200px] p-5
-                                                bg-white rounded-[1.5rem] border-2 ${theme.border}
+                                                relative group flex flex-col items-center justify-center text-center 
+                                                h-[130px] 2xl:h-[200px] p-4 2xl:p-5
+                                                bg-white rounded-[1.2rem] 2xl:rounded-[1.5rem] border-2 ${theme.border}
                                                 shadow-lg ${theme.shadow}
-                                                
                                                 bg-gradient-to-br hover:border-transparent ${theme.gradientFrom} ${theme.gradientTo}
                                                 hover:shadow-xl ${theme.hoverShadow}
-                                                
                                                 transition-all duration-500 ease-in-out hover:-translate-y-1
                                                 cursor-pointer overflow-hidden
                                             `}
                                         >
-                                            {/* אייקון רקע */}
-                                            <div className={`absolute -right-6 -bottom-6 rotate-12 transition-all duration-700 group-hover:rotate-0 group-hover:scale-110 group-hover:text-white/10 ${theme.iconColor}`}>
+                                            {/* הקטנת אייקון הרקע בלפטופ */}
+                                            <div className={`absolute -right-4 2xl:-right-6 -bottom-4 2xl:-bottom-6 rotate-12 transition-all duration-700 group-hover:rotate-0 group-hover:scale-110 group-hover:text-white/10 ${theme.iconColor} scale-75 2xl:scale-100`}>
                                                 <FileText size={90} />
                                             </div>
 
                                             <div className="relative z-10 flex flex-col items-center gap-2 transition-colors duration-300 w-full">
-                                                {/* כותרת מוגנת */}
-                                                <h3 className={`text-xl font-extrabold text-slate-800 line-clamp-2 leading-tight group-hover:text-white w-full`}>
+                                                <h3 className={`text-lg 2xl:text-xl font-extrabold text-slate-800 line-clamp-2 leading-tight group-hover:text-white w-full`}>
                                                     {displayTitle}
                                                 </h3>
                                             </div>
 
-                                            {/* כפתור צפייה */}
                                             <div className={`
-                                                absolute bottom-4 text-[10px] font-bold px-4 py-1.5 rounded-full
+                                                absolute bottom-3 2xl:bottom-4 text-[10px] font-bold px-3 2xl:px-4 py-1 2xl:py-1.5 rounded-full
                                                 bg-white/20 backdrop-blur-md text-white border border-white/30
                                                 opacity-0 translate-y-3 group-hover:opacity-100 group-hover:translate-y-0
                                                 transition-all duration-500 delay-100 shadow-sm
@@ -824,18 +790,17 @@ export default function DynamicIPIDashboard() {
                                                 לחץ לצפייה
                                             </div>
 
-                                            {/* כפתורי עריכה */}
                                             {isEditMode && (
-                                                <div className="absolute top-3 left-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 z-20">
+                                                <div className="absolute top-2 2xl:top-3 left-2 2xl:left-3 flex gap-1 2xl:gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 z-20">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); openEditItemModal(section, item); }}
-                                                        className="p-1.5 bg-white/20 backdrop-blur-md cursor-pointer text-white hover:bg-white hover:text-blue-600 rounded-full shadow-sm border border-white/30 hover:scale-110 active:scale-95 transition-all"
+                                                        className="p-1 2xl:p-1.5 bg-white/20 backdrop-blur-md cursor-pointer text-white hover:bg-white hover:text-blue-600 rounded-full shadow-sm border border-white/30 hover:scale-110 active:scale-95 transition-all"
                                                     >
                                                         <Edit size={14} />
                                                     </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleDeleteItem(section.id, item.id); }}
-                                                        className="p-1.5 bg-white/20 backdrop-blur-md text-white cursor-pointer hover:bg-white hover:text-red-500 rounded-full shadow-sm border border-white/30 hover:scale-110 active:scale-95 transition-all"
+                                                        className="p-1 2xl:p-1.5 bg-white/20 backdrop-blur-md text-white cursor-pointer hover:bg-white hover:text-red-500 rounded-full shadow-sm border border-white/30 hover:scale-110 active:scale-95 transition-all"
                                                     >
                                                         <Trash2 size={14} />
                                                     </button>
@@ -844,27 +809,28 @@ export default function DynamicIPIDashboard() {
                                         </div>
                                     );
                                 })}
+
+                                {/* כיווץ כפתור ה"הוסף" */}
                                 {isEditMode && (
                                     <button
                                         onClick={() => { setTargetSection(section); setShowAddItemModal(true); }}
                                         className={`
-                                            h-[200px] flex flex-col items-center justify-center gap-3
-                                            rounded-[1.5rem] border-2 border-dashed ${colors.border} ${colors.light} bg-opacity-30
+                                            h-[130px] 2xl:h-[200px] flex flex-col items-center justify-center gap-2 2xl:gap-3
+                                            rounded-[1.2rem] 2xl:rounded-[1.5rem] border-2 border-dashed ${colors.border} ${colors.light} bg-opacity-30
                                             hover:bg-opacity-100 hover:scale-[1.02] active:scale-95
                                             transition-all cursor-pointer group text-slate-400 hover:text-slate-600
                                         `}
                                     >
-                                        <div className={`p-4 rounded-full bg-white shadow-sm group-hover:scale-110 transition-transform ${colors.text}`}>
-                                            <Plus size={32} />
+                                        <div className={`p-2 2xl:p-4 rounded-full bg-white shadow-sm group-hover:scale-110 transition-transform ${colors.text}`}>
+                                            <Plus size={24} className="2xl:w-8 2xl:h-8" />
                                         </div>
-                                        <span className="font-bold text-base">הוסף ל-{section.title}</span>
+                                        <span className="font-bold text-sm 2xl:text-base">הוסף ל-{section.title}</span>
                                     </button>
                                 )}
                             </div>
                         </section>
                     );
                 })}
-
                 {/* 1. מיקום הבאנר - שים את זה מעל ה-div של הטבלה */}
                 <BirthdayTicker />
 
@@ -911,19 +877,21 @@ export default function DynamicIPIDashboard() {
             bg-gradient-to-br from-white via-white to-amber-50/30
         `}>
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-right border-separate border-spacing-y-3 px-6 py-6">
+                        <div className="overflow-x-auto w-full px-2 2xl:px-6">
+                            <table className="w-full table-fixed text-right border-separate border-spacing-y-2 2xl:border-spacing-y-3">
                                 <thead>
                                     <tr className="text-amber-700">
+                                        {/* עמודה לכפתור הגרירה */}
+                                        {isPhonebookEditMode && <th className="w-8"></th>}
+
                                         {phonebookSchema.filter(col => isPhonebookEditMode || col.key !== 'birthday').map(col => (
-                                            <th key={col.key} className="px-6 py-4 text-xl font-black uppercase tracking-tight text-right">
-                                                <div className="flex items-center gap-2 group/col">
-                                                    <span className="drop-shadow-sm">{col.label}</span>
-                                                </div>
+                                            <th key={col.key} className={`${col.width} px-2 py-2 2xl:py-4 text-xs 2xl:text-lg font-black uppercase tracking-tight text-right`}>
+                                                <span className="drop-shadow-sm truncate block">{col.label}</span>
                                             </th>
                                         ))}
-                                        {/* העמודה הריקה הזו שומרת מקום לפח האשפה כדי שהכותרות לא יזוזו! */}
-                                        {isPhonebookEditMode && <th className="w-16"></th>}
+
+                                        {/* עמודה לפח האשפה */}
+                                        {isPhonebookEditMode && <th className="w-12"></th>}
                                     </tr>
                                 </thead>
                                 <tbody>
