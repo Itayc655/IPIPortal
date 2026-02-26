@@ -292,11 +292,21 @@ export default function DynamicIPIDashboard() {
 
     const handlePhonebookDragEnd = (event: any) => {
         const { active, over } = event;
-        if (active.id !== over.id) {
-            const oldIndex = phonebookData.findIndex((row) => row.id === active.id);
-            const newIndex = phonebookData.findIndex((row) => row.id === over.id);
-            const newData = arrayMove(phonebookData, oldIndex, newIndex);
-            savePhonebookData(newData); // זה גם יעדכן את ה-State וגם ישלח ל-API
+
+        // הגנה קריטית 1: אם שיחררנו את העכבר מחוץ לטבלה - בטל את הגרירה מיד
+        if (!over) return;
+
+        // אם השורה באמת זזה למיקום חדש
+        if (String(active.id) !== String(over.id)) {
+            // הגנה קריטית 2: המרת ה-ID לטקסט והשוואה בטוחה כדי שלא יחזיר לנו 1-
+            const oldIndex = phonebookData.findIndex((row) => String(row.id) === String(active.id));
+            const newIndex = phonebookData.findIndex((row) => String(row.id) === String(over.id));
+
+            // הגנה 3: רק אם באמת מצאנו את שני המיקומים, נבצע את ההחלפה
+            if (oldIndex !== -1 && newIndex !== -1) {
+                const newData = arrayMove(phonebookData, oldIndex, newIndex);
+                savePhonebookData(newData); // מעדכן מסך + שומר ל-SQL
+            }
         }
     };
     const getColorClasses = (color: string) => {
@@ -507,22 +517,20 @@ export default function DynamicIPIDashboard() {
                 const workbook = XLSX.read(data, { type: 'array' });
                 const worksheet = workbook.Sheets[workbook.SheetNames[0]];
 
-                // כפייה על האקסל להביא רק טקסט נקי כדי למנוע קריסה
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: '' });
 
-                // הגדרת הפונקציה שחסרה לך ב-VS Code
                 const getValue = (row: any, possibleKeys: string[]) => {
                     const actualKey = Object.keys(row).find(key =>
                         possibleKeys.includes(key.trim())
                     );
                     const val = actualKey ? row[actualKey] : '';
-                    // וידוא שהערך תמיד חוזר כטקסט (מונע את שגיאת ה-split)
                     return String(val || '').trim();
                 };
 
-                // 1. קודם כל מייצרים את כל השורות
+                // 1. מיפוי עם ניקוי מזהים
                 const rawRows = jsonData.map((row: any) => ({
-                    id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), // הפכתי את ה-ID לטקסט בטוח יותר למסדי נתונים
+                    // שימוש ב-UUID רנדומלי אמיתי כדי למנוע כפילויות ID לנצח
+                    id: Math.random().toString(36).substring(2, 15) + Date.now().toString(36),
                     name: getValue(row, ['שם העובד', 'שם', 'Name']),
                     role: getValue(row, ['תפקיד', 'Role']),
                     phone: getValue(row, ['טלפון', 'Phone']),
@@ -531,11 +539,18 @@ export default function DynamicIPIDashboard() {
                     birthday: getValue(row, ['יום הולדת', 'תאריך לידה'])
                 }));
 
-                // 2. הסינון הקריטי: שומרים רק שורות שיש בהן שם עובד
-                const validRows = rawRows.filter(row => row.name !== '');
+                // 2. סינון אגרסיבי: רק שורות ששם העובד בהן הוא לפחות 2 תווים ולא רק מספר
+                const validRows = rawRows.filter(row => {
+                    const cleanName = row.name.replace(/[0-9]/g, '').trim(); // הסרת מספרים מהשם לבדיקה
+                    return cleanName.length >= 2;
+                });
 
-                // 3. משתמשים רק בשורות התקינות מעכשיו והלאה
-                if (!confirm(`האם להחליף את כל ספר הטלפונים ב-${validRows.length} עובדים חדשים? (סוננו ${rawRows.length - validRows.length} שורות ריקות)`)) {
+                if (validRows.length === 0) {
+                    alert("לא נמצאו נתוני עובדים תקינים בקובץ.");
+                    return;
+                }
+
+                if (!confirm(`נמצאו ${validRows.length} עובדים תקינים. האם להחליף את ספר הטלפונים? (סוננו ${rawRows.length - validRows.length} שורות פגומות)`)) {
                     e.target.value = '';
                     return;
                 }
@@ -835,9 +850,9 @@ export default function DynamicIPIDashboard() {
                 <BirthdayTicker />
 
                 {/* --- אזור ספר טלפונים קבוע --- */}
-                <div className="mt-20 mb-32 px-4">
+                <div className="mt-12 2xl:mt-20 lg:pl-[270px] xl:pl-[290px] 2xl:pl-[320px]">
                     {/* כותרת הסקשן */}
-                    <div className="flex justify-between items-end mb-8 max-w-7xl mx-auto">
+                    <div className="flex justify-between items-end mb-8 w-full">
                         <div>
                             <div className="flex items-center gap-3 mb-2">
                                 <div className="h-8 w-1.5 bg-amber-500 rounded-full"></div>
@@ -871,7 +886,7 @@ export default function DynamicIPIDashboard() {
                     </div>
                     {/* גוף הטבלה */}
                     <div className={`
-            max-w-7xl mx-auto
+            w-full
             relative bg-white rounded-[2.5rem] border-2 border-amber-100
             shadow-[0_20px_50px_rgba(245,158,11,0.05)] overflow-hidden
             bg-gradient-to-br from-white via-white to-amber-50/30
