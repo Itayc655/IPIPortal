@@ -24,18 +24,18 @@ export async function POST(request: Request) {
         const body = await request.json();
         const pool = await getConnection();
         const req = new sql.Request(pool);
-        // בתוך ה-API שמקבל את payload
-        const validData = payload.filter((row: any) =>
-            row.name && row.name.trim().length >= 2
-        );
-        // שמור רק את validData ל-SQL...
-
 
         if (body.type === 'schema') {
+            // שמירת מבנה הטבלה (ללא סינון)
             await req.input('val', sql.NVarChar, JSON.stringify(body.payload))
                 .query('UPDATE PhonebookConfig SET SchemaDef = @val WHERE Id = 1');
         } else {
-            await req.input('val', sql.NVarChar, JSON.stringify(body.payload))
+            // סינון נתונים ריקים רק עבור רשימת העובדים
+            const validData = body.payload.filter((row: any) =>
+                row.name && row.name.trim().length >= 2
+            );
+            
+            await req.input('val', sql.NVarChar, JSON.stringify(validData))
                 .query('UPDATE PhonebookData SET Content = @val WHERE Id = 1');
         }
 

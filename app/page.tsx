@@ -1,6 +1,7 @@
 "use client";
 import * as XLSX from 'xlsx';
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search, Plus, FileText, Trash2, X, Key, Lock, Unlock, Edit,
     ExternalLink, Copy, Check, LayoutGrid, Link as LinkIcon, File, Eye, Upload, Download, EyeOff, GripVertical, Gift
@@ -639,14 +640,18 @@ export default function DynamicIPIDashboard() {
         if (birthdayCelebrants.length === 0) return null;
 
         return (
-            <div className="absolute left-4 xl:left-6 2xl:left-8 top-48 lg:top-56 2xl:top-64 z-10 w-60 2xl:w-72 hidden lg:block animate-in fade-in slide-in-from-left-10 duration-1000 origin-top-left">
+            <div className="absolute left-4 xl:left-6 2xl:left-8 top-0 z-10 w-60 2xl:w-72 hidden lg:block animate-in fade-in slide-in-from-left-10 duration-1000 origin-top-left">
                 <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-pink-100 overflow-hidden relative">
-                    <div className="bg-gradient-to-r from-pink-500 to-rose-400 p-3 2xl:p-4 text-center">
+
+                    {/* כותרת ימי ההולדת (עם הצללה עדינה כדי שהגלילה תיראה יוקרתית) */}
+                    <div className="bg-gradient-to-r from-pink-500 to-rose-400 p-3 2xl:p-4 text-center relative z-20 shadow-md">
                         <h3 className="text-white font-black text-lg 2xl:text-xl flex justify-center items-center gap-2">
                             <Gift size={20} className="animate-bounce 2xl:w-6 2xl:h-6" /> חוגגים החודש!
                         </h3>
                     </div>
-                    <div className="p-3 2xl:p-4 space-y-2 2xl:space-y-3 max-h-[400px] 2xl:max-h-[500px] overflow-y-auto no-scrollbar">
+
+                    {/* אזור הגלילה - מוגבל בגובה לכ-3 כרטיסיות */}
+                    <div className="p-3 2xl:p-4 space-y-2 2xl:space-y-3 max-h-[240px] 2xl:max-h-[290px] overflow-y-auto">
                         {birthdayCelebrants.map((person, idx) => (
                             <div key={idx} className={`relative p-2 2xl:p-3 rounded-2xl border transition-all duration-500 ${person.isToday ? 'bg-gradient-to-br from-yellow-50 to-amber-50 border-amber-300 shadow-md scale-105' : 'bg-white border-slate-100'}`}>
                                 <div className="flex justify-between items-center">
@@ -659,15 +664,88 @@ export default function DynamicIPIDashboard() {
                             </div>
                         ))}
                     </div>
+
                 </div>
             </div>
         );
     };
+
+ // ==================== הודעות מערכת (System Messages) ====================
+    const [systemMessages, setSystemMessages] = useState<{ id: string, text: string, date: string }[]>([]);
+    const [currentMsgIndex, setCurrentMsgIndex] = useState(0);
+    const [newMsgText, setNewMsgText] = useState("");
+    const [isHovered, setIsHovered] = useState(false);
+
+    // משיכת ההודעות מה-SQL בטעינה ראשונית (עם שבירת קאש אגרסיבית)
+    useEffect(() => {
+        const loadMessages = async () => {
+            try {
+                const timestamp = new Date().getTime();
+                const res = await fetch(`/api/messages?t=${timestamp}`, { 
+                    cache: 'no-store',
+                    headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+                });
+                const json = await res.json();
+                if (json.data) setSystemMessages(json.data);
+            } catch (error) { 
+                console.error("שגיאה בטעינת הודעות:", error); 
+            }
+        };
+        loadMessages();
+    }, []);
+
+    // טיימר להחלפת הודעות עם זיהוי ריחוף
+    useEffect(() => {
+        if (systemMessages.length <= 1 || isHovered) return;
+        const timer = setInterval(() => {
+            setCurrentMsgIndex((prev) => (prev + 1) % systemMessages.length);
+        }, 5000);
+        return () => clearInterval(timer);
+    }, [systemMessages.length, isHovered]);
+
+    // הוספת הודעה + שמירה ב-SQL
+    const addSystemMessage = async () => {
+        if (!newMsgText.trim()) return;
+        const today = new Date();
+        const formattedDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
+        const newMsg = { id: Date.now().toString(), text: newMsgText, date: formattedDate };
+        
+        // עדכון המסך מיד
+        setSystemMessages([...systemMessages, newMsg]);
+        setNewMsgText("");
+
+        // שליחה ל-API
+        try {
+            await fetch('/api/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'add', message: newMsg })
+            });
+        } catch (error) {
+            console.error("שגיאה בשליחה לשרת:", error);
+        }
+    };
+
+    // מחיקת הודעה + עדכון ב-SQL
+    const removeSystemMessage = async (id: string) => {
+        setSystemMessages(systemMessages.filter(msg => msg.id !== id));
+        setCurrentMsgIndex(0); // איפוס כדי שהטיימר לא יקרוס
+        
+        try {
+            await fetch('/api/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'delete', id })
+            });
+        } catch(error) {
+            console.error("שגיאה במחיקה:", error);
+        }
+    };
+
     // ==================== RENDER ====================
     return (
         <div className="font-sans min-h-screen relative bg-slate-50 text-slate-900" dir="rtl">
 
-            <BirthdayTicker />
 
             {/* HEADER - מותאם למצב לפטופ ותואם למסך גדול */}
             <header className="max-w-7xl mx-auto px-4 2xl:px-6 py-4 2xl:py-10 flex justify-between items-center">
@@ -706,6 +784,7 @@ export default function DynamicIPIDashboard() {
             {/* MAIN CONTENT */}
             <main className="w-full max-w-[1800px] mx-auto px-4 lg:px-6 pb-32">
 
+
                 {/* SEARCH */}
                 <section className="mt-4 2xl:mt-10 mb-8 2xl:mb-24 relative text-center">
                     <h2 className="text-3xl 2xl:text-5xl font-black mb-4 2xl:mb-8 tracking-tight">מרכז המידע והנהלים</h2>
@@ -715,66 +794,148 @@ export default function DynamicIPIDashboard() {
                     </div>
                 </section>
 
-                {/* SECTIONS LOOP */}
-                {sections.map(section => {
-                    const colors = getColorClasses(section.color);
+                {/* ==================== אזור הודעות מערכת ==================== */}
+                {(!isEditMode && systemMessages.length === 0) ? null : (
+                    <section className="mb-12 2xl:mb-16 max-w-3xl xl:max-w-4xl 2xl:max-w-5xl mx-auto relative z-10 px-4">
 
-                    const visibleItems = section.items.filter((item: any) => {
-                        if (!searchTerm) return true;
-                        // חיפוש מותאם גם לקבצים
-                        return Object.entries(item.data).some(([key, val]: any) => {
-                            if (Array.isArray(val)) {
-                                return val.some((f: any) => f.name.toLowerCase().includes(searchTerm.toLowerCase()));
-                            }
-                            return typeof val === 'string' && val.toLowerCase().includes(searchTerm.toLowerCase());
-                        });
-                    });
+                        {/* תצוגת ההודעות (הבאנר הרץ) */}
+                        {systemMessages.length > 0 && (
+                            <div
+                                className="bg-gradient-to-r from-red-600 to-red-500 rounded-[2rem] p-6 2xl:p-10 relative shadow-xl shadow-red-500/20 overflow-hidden flex items-center justify-center min-h-[120px] 2xl:min-h-[160px] border-4 border-white/20 cursor-pointer group"
+                                onMouseEnter={() => setIsHovered(true)}
+                                onMouseLeave={() => setIsHovered(false)}
+                                onClick={() => {
+                                    if (systemMessages.length > 1) {
+                                        setCurrentMsgIndex((prev) => (prev + 1) % systemMessages.length);
+                                    }
+                                }}
+                            >
+                                <div className="absolute top-4 right-6 text-red-100 font-bold font-mono text-xs 2xl:text-sm bg-black/10 px-3 py-1 rounded-full z-20">
+                                    {systemMessages[currentMsgIndex]?.date}
+                                </div>
 
-                    if (!isEditMode && visibleItems.length === 0) return null;
+                                <AnimatePresence mode="wait">
+                                    <motion.div
+                                        key={systemMessages[currentMsgIndex]?.id}
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -20 }}
+                                        transition={{ duration: 0.5 }}
+                                        className="text-xl xl:text-2xl 2xl:text-3xl font-black text-white text-center px-8"
+                                    >
+                                        {systemMessages[currentMsgIndex]?.text}
+                                    </motion.div>
+                                </AnimatePresence>
 
-                    return (
-                        <section key={section.id} className="mb-12 2xl:mb-20 lg:pl-[270px] xl:pl-[290px] 2xl:pl-[320px]">
-                            <div className="flex items-center gap-3 2xl:gap-4 mb-6 2xl:mb-10">
-                                <h2 className={`text-2xl 2xl:text-3xl font-black flex items-center gap-3 2xl:gap-4 text-slate-800`}>
-                                    <span className={`w-3 2xl:w-4 h-8 2xl:h-10 rounded-full ${colors.bg}`}></span>
-                                    {section.title} <span className="text-slate-400 font-normal text-xl 2xl:text-2xl">({visibleItems.length})</span>
-                                </h2>
-
-                                {isEditMode && (
-                                    <div className="flex gap-2 items-center">
-                                        <button
-                                            onClick={() => openEditSectionModal(section)}
-                                            className="p-1.5 2xl:p-2 text-slate-400 hover:text-blue-500 cursor-pointer hover:bg-blue-50 rounded-full transition-all"
-                                            title="ערוך קטגוריה"
-                                        >
-                                            <Edit size={20} className="2xl:w-[22px] 2xl:h-[22px]" />
-                                        </button>
-
-                                        <button
-                                            onClick={() => handleDeleteSection(section.id)}
-                                            className="p-1.5 2xl:p-2 text-slate-400 hover:text-red-500 cursor-pointer hover:bg-red-50 rounded-full transition-all"
-                                            title="מחק קטגוריה"
-                                        >
-                                            <Trash2 size={20} className="2xl:w-[22px] 2xl:h-[22px]" />
-                                        </button>
+                                {systemMessages.length > 1 && (
+                                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+                                        {systemMessages.map((_, idx) => (
+                                            <div key={idx} className={`h-1.5 rounded-full transition-all duration-500 ${idx === currentMsgIndex ? 'w-8 bg-white' : 'w-2 bg-white/40'}`} />
+                                        ))}
                                     </div>
                                 )}
                             </div>
+                        )}
+                        {/* ממשק העריכה */}
+                        {isEditMode && (
+                            <div className="mt-4 bg-white p-6 2xl:p-8 rounded-[2rem] border-2 border-red-100 shadow-sm relative z-20">
+                                <h3 className="font-bold text-red-600 mb-4 text-lg">ניהול הודעות מערכת רצות</h3>
+                                <div className="flex gap-4 mb-6">
+                                    <input
+                                        className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl p-4 outline-none focus:border-red-400 font-bold text-slate-700"
+                                        placeholder="הקלד הודעת מערכת חדשה כאן..."
+                                        value={newMsgText}
+                                        onChange={(e) => setNewMsgText(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && addSystemMessage()}
+                                    />
+                                    <button onClick={addSystemMessage} className="bg-red-600 text-white px-8 py-4 rounded-2xl font-black hover:bg-red-700 cursor-pointer shadow-md">
+                                        הוסף הודעה
+                                    </button>
+                                </div>
 
-                            {/* כיווץ הרווחים ב-Grid ללפטופ (gap-4) */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 2xl:gap-8">
-                                {visibleItems.map((item: any) => {
-                                    const theme = getCardGradientTheme(section.color);
-                                    const rawTitle = item.data[section.schema[0]?.key];
-                                    const displayTitle = (typeof rawTitle === 'string' || typeof rawTitle === 'number')
-                                        ? rawTitle
-                                        : (rawTitle ? "(תוכן מורכב)" : "ללא כותרת");
+                                {systemMessages.length > 0 && (
+                                    <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                        {systemMessages.map((msg) => (
+                                            <div key={msg.id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                                <div className="flex items-center gap-4">
+                                                    <span className="text-sm font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-lg">{msg.date}</span>
+                                                    <span className="font-bold text-slate-800 text-lg">{msg.text}</span>
+                                                </div>
+                                                <button onClick={() => removeSystemMessage(msg.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg cursor-pointer">
+                                                    מחק
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </section>
+                )}
 
-                                    return (
-                                        <div
-                                            key={item.id}
-                                            onClick={() => setViewItem({ item, section })}
-                                            className={`
+                {/* SECTIONS LOOP */}
+                <div className="relative w-full">
+                    <BirthdayTicker />
+
+                    {sections.map(section => {
+                        const colors = getColorClasses(section.color);
+
+                        const visibleItems = section.items.filter((item: any) => {
+                            if (!searchTerm) return true;
+                            // חיפוש מותאם גם לקבצים
+                            return Object.entries(item.data).some(([key, val]: any) => {
+                                if (Array.isArray(val)) {
+                                    return val.some((f: any) => f.name.toLowerCase().includes(searchTerm.toLowerCase()));
+                                }
+                                return typeof val === 'string' && val.toLowerCase().includes(searchTerm.toLowerCase());
+                            });
+                        });
+
+                        if (!isEditMode && visibleItems.length === 0) return null;
+
+                        return (
+                            <section key={section.id} className="mb-12 2xl:mb-20 lg:pl-[270px] xl:pl-[290px] 2xl:pl-[320px]">
+                                <div className="flex items-center gap-3 2xl:gap-4 mb-6 2xl:mb-10">
+                                    <h2 className={`text-2xl 2xl:text-3xl font-black flex items-center gap-3 2xl:gap-4 text-slate-800`}>
+                                        <span className={`w-3 2xl:w-4 h-8 2xl:h-10 rounded-full ${colors.bg}`}></span>
+                                        {section.title} <span className="text-slate-400 font-normal text-xl 2xl:text-2xl">({visibleItems.length})</span>
+                                    </h2>
+
+                                    {isEditMode && (
+                                        <div className="flex gap-2 items-center">
+                                            <button
+                                                onClick={() => openEditSectionModal(section)}
+                                                className="p-1.5 2xl:p-2 text-slate-400 hover:text-blue-500 cursor-pointer hover:bg-blue-50 rounded-full transition-all"
+                                                title="ערוך קטגוריה"
+                                            >
+                                                <Edit size={20} className="2xl:w-[22px] 2xl:h-[22px]" />
+                                            </button>
+
+                                            <button
+                                                onClick={() => handleDeleteSection(section.id)}
+                                                className="p-1.5 2xl:p-2 text-slate-400 hover:text-red-500 cursor-pointer hover:bg-red-50 rounded-full transition-all"
+                                                title="מחק קטגוריה"
+                                            >
+                                                <Trash2 size={20} className="2xl:w-[22px] 2xl:h-[22px]" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* כיווץ הרווחים ב-Grid ללפטופ (gap-4) */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 2xl:gap-8">
+                                    {visibleItems.map((item: any) => {
+                                        const theme = getCardGradientTheme(section.color);
+                                        const rawTitle = item.data[section.schema[0]?.key];
+                                        const displayTitle = (typeof rawTitle === 'string' || typeof rawTitle === 'number')
+                                            ? rawTitle
+                                            : (rawTitle ? "(תוכן מורכב)" : "ללא כותרת");
+
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                onClick={() => setViewItem({ item, section })}
+                                                className={`
                                                 relative group flex flex-col items-center justify-center text-center 
                                                 h-[130px] 2xl:h-[200px] p-4 2xl:p-5
                                                 bg-white rounded-[1.2rem] 2xl:rounded-[1.5rem] border-2 ${theme.border}
@@ -784,70 +945,71 @@ export default function DynamicIPIDashboard() {
                                                 transition-all duration-500 ease-in-out hover:-translate-y-1
                                                 cursor-pointer overflow-hidden
                                             `}
-                                        >
-                                            {/* הקטנת אייקון הרקע בלפטופ */}
-                                            <div className={`absolute -right-4 2xl:-right-6 -bottom-4 2xl:-bottom-6 rotate-12 transition-all duration-700 group-hover:rotate-0 group-hover:scale-110 group-hover:text-white/10 ${theme.iconColor} scale-75 2xl:scale-100`}>
-                                                <FileText size={90} />
-                                            </div>
+                                            >
+                                                {/* הקטנת אייקון הרקע בלפטופ */}
+                                                <div className={`absolute -right-4 2xl:-right-6 -bottom-4 2xl:-bottom-6 rotate-12 transition-all duration-700 group-hover:rotate-0 group-hover:scale-110 group-hover:text-white/10 ${theme.iconColor} scale-75 2xl:scale-100`}>
+                                                    <FileText size={90} />
+                                                </div>
 
-                                            <div className="relative z-10 flex flex-col items-center gap-2 transition-colors duration-300 w-full">
-                                                <h3 className={`text-lg 2xl:text-xl font-extrabold text-slate-800 line-clamp-2 leading-tight group-hover:text-white w-full`}>
-                                                    {displayTitle}
-                                                </h3>
-                                            </div>
+                                                <div className="relative z-10 flex flex-col items-center gap-2 transition-colors duration-300 w-full">
+                                                    <h3 className={`text-lg 2xl:text-xl font-extrabold text-slate-800 line-clamp-2 leading-tight group-hover:text-white w-full`}>
+                                                        {displayTitle}
+                                                    </h3>
+                                                </div>
 
-                                            <div className={`
+                                                <div className={`
                                                 absolute bottom-3 2xl:bottom-4 text-[10px] font-bold px-3 2xl:px-4 py-1 2xl:py-1.5 rounded-full
                                                 bg-white/20 backdrop-blur-md text-white border border-white/30
                                                 opacity-0 translate-y-3 group-hover:opacity-100 group-hover:translate-y-0
                                                 transition-all duration-500 delay-100 shadow-sm
                                             `}>
-                                                לחץ לצפייה
-                                            </div>
-
-                                            {isEditMode && (
-                                                <div className="absolute top-2 2xl:top-3 left-2 2xl:left-3 flex gap-1 2xl:gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 z-20">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); openEditItemModal(section, item); }}
-                                                        className="p-1 2xl:p-1.5 bg-white/20 backdrop-blur-md cursor-pointer text-white hover:bg-white hover:text-blue-600 rounded-full shadow-sm border border-white/30 hover:scale-110 active:scale-95 transition-all"
-                                                    >
-                                                        <Edit size={14} />
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleDeleteItem(section.id, item.id); }}
-                                                        className="p-1 2xl:p-1.5 bg-white/20 backdrop-blur-md text-white cursor-pointer hover:bg-white hover:text-red-500 rounded-full shadow-sm border border-white/30 hover:scale-110 active:scale-95 transition-all"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
+                                                    לחץ לצפייה
                                                 </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
 
-                                {/* כיווץ כפתור ה"הוסף" */}
-                                {isEditMode && (
-                                    <button
-                                        onClick={() => { setTargetSection(section); setShowAddItemModal(true); }}
-                                        className={`
+                                                {isEditMode && (
+                                                    <div className="absolute top-2 2xl:top-3 left-2 2xl:left-3 flex gap-1 2xl:gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 z-20">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); openEditItemModal(section, item); }}
+                                                            className="p-1 2xl:p-1.5 bg-white/20 backdrop-blur-md cursor-pointer text-white hover:bg-white hover:text-blue-600 rounded-full shadow-sm border border-white/30 hover:scale-110 active:scale-95 transition-all"
+                                                        >
+                                                            <Edit size={14} />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDeleteItem(section.id, item.id); }}
+                                                            className="p-1 2xl:p-1.5 bg-white/20 backdrop-blur-md text-white cursor-pointer hover:bg-white hover:text-red-500 rounded-full shadow-sm border border-white/30 hover:scale-110 active:scale-95 transition-all"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/* כיווץ כפתור ה"הוסף" */}
+                                    {isEditMode && (
+                                        <button
+                                            onClick={() => { setTargetSection(section); setShowAddItemModal(true); }}
+                                            className={`
                                             h-[130px] 2xl:h-[200px] flex flex-col items-center justify-center gap-2 2xl:gap-3
                                             rounded-[1.2rem] 2xl:rounded-[1.5rem] border-2 border-dashed ${colors.border} ${colors.light} bg-opacity-30
                                             hover:bg-opacity-100 hover:scale-[1.02] active:scale-95
                                             transition-all cursor-pointer group text-slate-400 hover:text-slate-600
                                         `}
-                                    >
-                                        <div className={`p-2 2xl:p-4 rounded-full bg-white shadow-sm group-hover:scale-110 transition-transform ${colors.text}`}>
-                                            <Plus size={24} className="2xl:w-8 2xl:h-8" />
-                                        </div>
-                                        <span className="font-bold text-sm 2xl:text-base">הוסף ל-{section.title}</span>
-                                    </button>
-                                )}
-                            </div>
-                        </section>
-                    );
-                })}
-                {/* 1. מיקום הבאנר - שים את זה מעל ה-div של הטבלה */}
-                <BirthdayTicker />
+                                        >
+                                            <div className={`p-2 2xl:p-4 rounded-full bg-white shadow-sm group-hover:scale-110 transition-transform ${colors.text}`}>
+                                                <Plus size={24} className="2xl:w-8 2xl:h-8" />
+                                            </div>
+                                            <span className="font-bold text-sm 2xl:text-base">הוסף ל-{section.title}</span>
+                                        </button>
+                                    )}
+                                </div>
+
+                            </section>
+                        );
+                    })}
+
+                </div>
 
                 {/* --- אזור ספר טלפונים קבוע --- */}
                 <div className="mt-12 2xl:mt-20 lg:pl-[270px] xl:pl-[290px] 2xl:pl-[320px]">
