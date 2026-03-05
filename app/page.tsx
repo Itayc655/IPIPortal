@@ -670,25 +670,29 @@ export default function DynamicIPIDashboard() {
         );
     };
 
- // ==================== הודעות מערכת (System Messages) ====================
+    // ==================== הודעות מערכת (System Messages) ====================
     const [systemMessages, setSystemMessages] = useState<{ id: string, text: string, date: string }[]>([]);
     const [currentMsgIndex, setCurrentMsgIndex] = useState(0);
     const [newMsgText, setNewMsgText] = useState("");
     const [isHovered, setIsHovered] = useState(false);
+
+    // חישוב התאריך של היום להצגה דינמית
+    const today = new Date();
+    const todayFormatted = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
 
     // משיכת ההודעות מה-SQL בטעינה ראשונית (עם שבירת קאש אגרסיבית)
     useEffect(() => {
         const loadMessages = async () => {
             try {
                 const timestamp = new Date().getTime();
-                const res = await fetch(`/api/messages?t=${timestamp}`, { 
+                const res = await fetch(`/api/messages?t=${timestamp}`, {
                     cache: 'no-store',
                     headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
                 });
                 const json = await res.json();
                 if (json.data) setSystemMessages(json.data);
-            } catch (error) { 
-                console.error("שגיאה בטעינת הודעות:", error); 
+            } catch (error) {
+                console.error("שגיאה בטעינת הודעות:", error);
             }
         };
         loadMessages();
@@ -709,7 +713,7 @@ export default function DynamicIPIDashboard() {
         const today = new Date();
         const formattedDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
         const newMsg = { id: Date.now().toString(), text: newMsgText, date: formattedDate };
-        
+
         // עדכון המסך מיד
         setSystemMessages([...systemMessages, newMsg]);
         setNewMsgText("");
@@ -730,14 +734,14 @@ export default function DynamicIPIDashboard() {
     const removeSystemMessage = async (id: string) => {
         setSystemMessages(systemMessages.filter(msg => msg.id !== id));
         setCurrentMsgIndex(0); // איפוס כדי שהטיימר לא יקרוס
-        
+
         try {
             await fetch('/api/messages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'delete', id })
             });
-        } catch(error) {
+        } catch (error) {
             console.error("שגיאה במחיקה:", error);
         }
     };
@@ -811,7 +815,7 @@ export default function DynamicIPIDashboard() {
                                 }}
                             >
                                 <div className="absolute top-4 right-6 text-red-100 font-bold font-mono text-xs 2xl:text-sm bg-black/10 px-3 py-1 rounded-full z-20">
-                                    {systemMessages[currentMsgIndex]?.date}
+                                    {todayFormatted}
                                 </div>
 
                                 <AnimatePresence mode="wait">
