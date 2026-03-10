@@ -753,15 +753,31 @@ export default function DynamicIPIDashboard() {
 
             {/* HEADER - מותאם למצב לפטופ ותואם למסך גדול */}
             <header className="max-w-7xl mx-auto px-4 2xl:px-6 py-4 2xl:py-10 flex justify-between items-center">
-                <div className="flex items-center gap-3 2xl:gap-5">
-                    {/* הקטנת הריבוע של הלוגו בלפטופ */}
-                    <div className="bg-red-600 p-3 2xl:p-5 rounded-2xl 2xl:rounded-3xl shadow-lg shadow-red-500/20">
-                        <div className="text-white font-black text-3xl 2xl:text-5xl tracking-tighter px-1 2xl:px-2">IPI</div>
+                {/* אזור הכותרת והלוגו */}
+                <div className="flex items-center gap-4"> {/* 👈 כאן שולטים במרחק! gap-4 זה בינוני. אפשר לשנות ל-gap-2 כדי לקרב יותר */}
+
+
+                    {/* הלוגו המרחף */}
+                    <div className="relative w-30 h-30 group cursor-pointer">
+                        <img
+                            src="/logo-red.png"
+                            alt="IPI Logo"
+                            className="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 opacity-100 group-hover:opacity-0"
+                        />
+                        <img
+                            src="/logo-blue.png"
+                            alt="IPI Logo Hover"
+                            className="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 opacity-0 group-hover:opacity-100"
+                        />
                     </div>
-                    <div className="hidden md:block">
-                        <h1 className="text-xl 2xl:text-3xl font-extrabold text-red-600 tracking-tight">פורטל</h1>
-                        <p className="text-xs 2xl:text-sm text-slate-500 font-medium mt-0.5 2xl:mt-1">IPI Portal</p>
+
+                    
+                    {/* אזור הטקסט */}
+                    <div className="flex flex-col text-right">
+                        <h1 className="text-4xl font-black text-red-600 leading-none tracking-tight">פורטל</h1>
+                        <span className="text-lg text--red-600 font-medium tracking-wide">IPI Portal</span>
                     </div>
+
                 </div>
 
                 {/* התאמת הכפתור (הטוגל) למידות לפטופ */}
