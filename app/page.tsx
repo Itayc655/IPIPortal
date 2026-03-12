@@ -533,6 +533,7 @@ export default function DynamicIPIDashboard() {
                     // שימוש ב-UUID רנדומלי אמיתי כדי למנוע כפילויות ID לנצח
                     id: Math.random().toString(36).substring(2, 15) + Date.now().toString(36),
                     name: getValue(row, ['שם העובד', 'שם', 'Name']),
+                    department: getValue(row, ['מחלקה', 'department']),
                     role: getValue(row, ['תפקיד', 'Role']),
                     phone: getValue(row, ['טלפון', 'Phone']),
                     email: getValue(row, ['מייל', 'Email']),
@@ -569,6 +570,7 @@ export default function DynamicIPIDashboard() {
     const downloadExcelTemplate = () => {
         const headers = [{
             'שם העובד': 'ישראל ישראלי',
+            'מחלקה': 'מכירות',
             'תפקיד': 'מנהל',
             'טלפון': '050-1234567',
             'מייל': 'test@ipi.co.il',
@@ -600,6 +602,7 @@ export default function DynamicIPIDashboard() {
 
     const [phonebookSchema, setPhonebookSchema] = useState<{ key: string, label: string, width?: string }[]>([
         { key: 'name', label: 'שם העובד', width: 'w-[15%]' },
+        { key: 'department', label: 'מחלקה' , width: 'w-[15%]'},
         { key: 'role', label: 'תפקיד', width: 'w-[15%]' },
         { key: 'phone', label: 'טלפון', width: 'w-[15%]' },
         { key: 'email', label: 'מייל', width: 'w-[25%]' },
@@ -771,7 +774,7 @@ export default function DynamicIPIDashboard() {
                         />
                     </div>
 
-                    
+
                     {/* אזור הטקסט */}
                     <div className="flex flex-col text-right">
                         <h1 className="text-4xl font-black text-red-600 leading-none tracking-tight">פורטל</h1>
@@ -1074,40 +1077,40 @@ export default function DynamicIPIDashboard() {
             bg-gradient-to-br from-white via-white to-amber-50/30
         `}>
 
-                        <div className="overflow-x-auto w-full px-2 2xl:px-6">
-                            <table className="w-full table-fixed text-right border-separate border-spacing-y-2 2xl:border-spacing-y-3">
-                                <thead>
-                                    <tr className="text-amber-700">
-                                        {/* עמודה לכפתור הגרירה */}
-                                        {isPhonebookEditMode && <th className="w-8"></th>}
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePhonebookDragEnd}>
+                            <div className="overflow-x-auto w-full px-2 2xl:px-6">
+                                <table className="w-full table-fixed text-right border-separate border-spacing-y-2 2xl:border-spacing-y-3">
+                                    <thead>
+                                        <tr className="text-amber-700">
+                                            {/* עמודה לכפתור הגרירה */}
+                                            {isPhonebookEditMode && <th className="w-8"></th>}
 
-                                        {phonebookSchema.filter(col => isPhonebookEditMode || col.key !== 'birthday').map(col => (
-                                            <th key={col.key} className={`${col.width} px-2 py-2 2xl:py-4 text-xs 2xl:text-lg font-black uppercase tracking-tight text-right`}>
-                                                <span className="drop-shadow-sm truncate block">{col.label}</span>
-                                            </th>
-                                        ))}
+                                            {phonebookSchema.filter(col => isPhonebookEditMode || col.key !== 'birthday').map(col => (
+                                                <th key={col.key} className={`${col.width} px-2 py-2 2xl:py-4 text-xs 2xl:text-lg font-black uppercase tracking-tight text-right`}>
+                                                    <span className="drop-shadow-sm truncate block">{col.label}</span>
+                                                </th>
+                                            ))}
 
-                                        {/* עמודה לפח האשפה */}
-                                        {isPhonebookEditMode && <th className="w-12"></th>}
-                                    </tr>
-                                </thead>
-                                <tbody>
+                                            {/* עמודה לפח האשפה */}
+                                            {isPhonebookEditMode && <th className="w-12"></th>}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
 
-                                    {(() => {
-                                        // סינון השורות לפי החיפוש
-                                        const filteredRows = phonebookData.filter(row => {
-                                            if (!phonebookSearch) return true;
-                                            return Object.values(row).some(val =>
-                                                String(val).toLowerCase().includes(phonebookSearch.toLowerCase())
-                                            );
-                                        });
+                                        {(() => {
+                                            // סינון השורות לפי החיפוש
+                                            const filteredRows = phonebookData.filter(row => {
+                                                if (!phonebookSearch) return true;
+                                                return Object.values(row).some(val =>
+                                                    String(val).toLowerCase().includes(phonebookSearch.toLowerCase())
+                                                );
+                                            });
 
-                                        if (filteredRows.length === 0) {
-                                            return <tr><td colSpan={10} className="text-center py-20 text-slate-300 font-bold text-xl italic">לא נמצאו תוצאות לחיפוש...</td></tr>;
-                                        }
+                                            if (filteredRows.length === 0) {
+                                                return <tr><td colSpan={10} className="text-center py-20 text-slate-300 font-bold text-xl italic">לא נמצאו תוצאות לחיפוש...</td></tr>;
+                                            }
 
-                                        return (
-                                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePhonebookDragEnd}>
+                                            return (
                                                 <SortableContext items={filteredRows.map(row => row.id)} strategy={verticalListSortingStrategy}>
                                                     {filteredRows.map((row) => (
                                                         <SortableRow
@@ -1120,12 +1123,12 @@ export default function DynamicIPIDashboard() {
                                                         />
                                                     ))}
                                                 </SortableContext>
-                                            </DndContext>
-                                        );
-                                    })()}
-                                </tbody>
-                            </table>
-                        </div>
+                                            );
+                                        })()}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </DndContext>
 
                         {isPhonebookEditMode && (
                             <div className="p-8 border-t border-amber-50 flex justify-center gap-4 bg-amber-50/30 flex-wrap">
@@ -1289,6 +1292,7 @@ export default function DynamicIPIDashboard() {
                                                         <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider">
                                                             <tr>
                                                                 <th className="px-6 py-4">שם העובד</th>
+                                                                <th className="px-6 py-4">מחלקה</th>
                                                                 <th className="px-6 py-4">תפקיד</th>
                                                                 <th className="px-6 py-4">טלפון אישי</th>
                                                                 <th className="px-6 py-4">שלוחה</th>
@@ -1299,6 +1303,7 @@ export default function DynamicIPIDashboard() {
                                                                 <tr key={i} className="hover:bg-slate-50 transition-colors">
                                                                     {/* הגנה נוספת: וידוא שכל תא בטבלה הוא טקסט תקין ולא אובייקט */}
                                                                     <td className="px-6 py-4 font-bold text-slate-800">{typeof row.name === 'string' ? row.name : ''}</td>
+                                                                    <td className="px-6 py-4 font-bold text-slate-800">{typeof row.department === 'string' ? row.department : ''}</td>
                                                                     <td className="px-6 py-4 text-slate-600">{typeof row.role === 'string' ? row.role : ''}</td>
                                                                     <td className="px-6 py-4 font-mono text-slate-600 dir-ltr text-right">{typeof row.phone === 'string' ? row.phone : ''}</td>
                                                                     <td className="px-6 py-4 font-mono font-bold text-blue-600">{typeof row.ext === 'string' ? row.ext : ''}</td>
@@ -1472,7 +1477,7 @@ export default function DynamicIPIDashboard() {
                                             };
 
                                             const addRow = () => {
-                                                setNewItemData({ ...newItemData, [field.key]: [...rows, { name: '', role: '', phone: '', ext: '' }] });
+                                                setNewItemData({ ...newItemData, [field.key]: [...rows, { name: '', department: '', role: '', phone: '', ext: '' }] });
                                             };
 
                                             const removeRow = (index: number) => {
@@ -1486,13 +1491,26 @@ export default function DynamicIPIDashboard() {
                                                         {rows.map((row: any, i: number) => (
                                                             <div key={i} className="flex gap-2 items-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
                                                                 <div className="bg-slate-100 w-8 h-8 flex items-center justify-center rounded-full text-xs font-bold shrink-0">{i + 1}</div>
-                                                                <input placeholder="שם מלא" className="w-1/4 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.name} onChange={e => updateRow(i, 'name', e.target.value)} />
+
+                                                                <input placeholder="שם מלא" className="w-1/5 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.name} onChange={e => updateRow(i, 'name', e.target.value)} />
+
                                                                 <div className="w-px h-6 bg-slate-100"></div>
-                                                                <input placeholder="תפקיד" className="w-1/4 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.role} onChange={e => updateRow(i, 'role', e.target.value)} />
+
+                                                                {/* 👇 הנה שדה המחלקה החדש 👇 */}
+                                                                <input placeholder="מחלקה" className="w-1/5 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.department || ''} onChange={e => updateRow(i, 'department', e.target.value)} />
+
                                                                 <div className="w-px h-6 bg-slate-100"></div>
-                                                                <input placeholder="נייד" className="w-1/4 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.phone} onChange={e => updateRow(i, 'phone', e.target.value)} />
+
+                                                                <input placeholder="תפקיד" className="w-1/5 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.role} onChange={e => updateRow(i, 'role', e.target.value)} />
+
                                                                 <div className="w-px h-6 bg-slate-100"></div>
+
+                                                                <input placeholder="נייד" className="w-1/5 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.phone} onChange={e => updateRow(i, 'phone', e.target.value)} />
+
+                                                                <div className="w-px h-6 bg-slate-100"></div>
+
                                                                 <input placeholder="שלוחה" className="w-20 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.ext} onChange={e => updateRow(i, 'ext', e.target.value)} />
+
                                                                 <button onClick={() => removeRow(i)} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={16} /></button>
                                                             </div>
                                                         ))}
