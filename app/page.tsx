@@ -602,7 +602,7 @@ export default function DynamicIPIDashboard() {
 
     const [phonebookSchema, setPhonebookSchema] = useState<{ key: string, label: string, width?: string }[]>([
         { key: 'name', label: 'שם העובד', width: 'w-[15%]' },
-        { key: 'department', label: 'מחלקה' , width: 'w-[15%]'},
+        { key: 'department', label: 'מחלקה', width: 'w-[15%]' },
         { key: 'role', label: 'תפקיד', width: 'w-[15%]' },
         { key: 'phone', label: 'טלפון', width: 'w-[15%]' },
         { key: 'email', label: 'מייל', width: 'w-[25%]' },
@@ -1077,6 +1077,31 @@ export default function DynamicIPIDashboard() {
             bg-gradient-to-br from-white via-white to-amber-50/30
         `}>
 
+                        {isPhonebookEditMode && (
+                            <div className="p-8 border-t border-amber-50 flex justify-center gap-4 bg-amber-50/30 flex-wrap">
+                                {/* 1. כפתור הוספה רגיל */}
+                                <button onClick={addPhonebookRow} className="flex items-center gap-3 cursor-pointer text-white font-black bg-slate-900 px-8 py-4 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-xl">
+                                    <Plus size={20} /> הוסף ידנית
+                                </button>
+
+                                {/* 2. כפתור העלאת אקסל */}
+                                <label className="flex items-center gap-3 cursor-pointer text-slate-900 font-black bg-amber-400 px-8 py-4 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-xl">
+                                    <Upload size={20} /> ייבא מאקסל
+                                    <input
+                                        type="file"
+                                        accept=".xlsx, .xls, .csv"
+                                        className="hidden"
+                                        onChange={handleExcelUpload}
+                                    />
+                                </label>
+
+                                {/* 3. כפתור הורדת תבנית */}
+                                <button onClick={downloadExcelTemplate} className="flex items-center gap-3 cursor-pointer text-amber-800 font-black bg-amber-100 border-2 border-amber-200 px-8 py-4 rounded-[2rem] hover:bg-amber-200 hover:scale-105 transition-all shadow-sm">
+                                    <Download size={20} /> הורד תבנית
+                                </button>
+                            </div>
+                        )}
+
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePhonebookDragEnd}>
                             <div className="overflow-x-auto w-full px-2 2xl:px-6">
                                 <table className="w-full table-fixed text-right border-separate border-spacing-y-2 2xl:border-spacing-y-3">
@@ -1130,30 +1155,7 @@ export default function DynamicIPIDashboard() {
                             </div>
                         </DndContext>
 
-                        {isPhonebookEditMode && (
-                            <div className="p-8 border-t border-amber-50 flex justify-center gap-4 bg-amber-50/30 flex-wrap">
-                                {/* 1. כפתור הוספה רגיל */}
-                                <button onClick={addPhonebookRow} className="flex items-center gap-3 cursor-pointer text-white font-black bg-slate-900 px-8 py-4 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-xl">
-                                    <Plus size={20} /> הוסף ידנית
-                                </button>
 
-                                {/* 2. כפתור העלאת אקסל */}
-                                <label className="flex items-center gap-3 cursor-pointer text-slate-900 font-black bg-amber-400 px-8 py-4 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-xl">
-                                    <Upload size={20} /> ייבא מאקסל
-                                    <input
-                                        type="file"
-                                        accept=".xlsx, .xls, .csv"
-                                        className="hidden"
-                                        onChange={handleExcelUpload}
-                                    />
-                                </label>
-
-                                {/* 3. כפתור הורדת תבנית */}
-                                <button onClick={downloadExcelTemplate} className="flex items-center gap-3 cursor-pointer text-amber-800 font-black bg-amber-100 border-2 border-amber-200 px-8 py-4 rounded-[2rem] hover:bg-amber-200 hover:scale-105 transition-all shadow-sm">
-                                    <Download size={20} /> הורד תבנית
-                                </button>
-                            </div>
-                        )}
                     </div>
                 </div>
 
