@@ -1,20 +1,18 @@
 import type { Metadata } from "next";
-import { Assistant } from "next/font/google"; // 1. מייבאים את הפונט
+import { Assistant } from "next/font/google";
 import "./globals.css";
-import { headers } from 'next/headers';
 import { getCurrentUser } from '@/lib/auth';
 
-// 2. מגדירים את הפונט ותומכים בעברית
 const assistant = Assistant({
   subsets: ["hebrew", "latin"],
-  weight: ["300", "400", "600", "700", "800"], // משקלים שונים (רגיל, מודגש, שמן)
+  weight: ["400", "700"], 
 });
 
 export const metadata: Metadata = {
   title: "IPI PORTAL",
   description: "מערכת לשימור ידע בחברה",
   icons: {
-    icon: '/favicon.ico?v=2', // התוספת הזו שוברת את המטמון של הדפדפן
+    icon: '/favicon.ico?v=2',
   },
 };
 
@@ -24,11 +22,15 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   
-  // הנתונים נמשכים ונשמרים בזיכרון מאחורי הקלעים
+  // 1. שליפת המשתמש
   const user = await getCurrentUser();
 
-  // לדוגמה: אפשר להשתמש בנתונים כאן כדי לבדוק הרשאות
-  // const isIT = user.department === 'IT';
+  // 2. פקודת הדפסה לטרמינל (תראה את זה ב-PM2 Logs או בטרמינל בשרת)
+  console.log('--- User Identity Check ---');
+  console.log('Username:', user.username);
+  console.log('Department:', user.department);
+  console.log('Display Name:', user.displayName);
+  console.log('---------------------------');
 
   return (
     <html lang="he" dir="rtl">

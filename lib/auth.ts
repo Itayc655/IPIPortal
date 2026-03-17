@@ -4,10 +4,17 @@ import util from 'util';
 
 const execPromise = util.promisify(exec);
 
-// --- הפתרון לעומסים: זיכרון מטמון (Cache) ---
-// כאן השרת ישמור את הנתונים של כל משתמש
+// === מילון תרגום אישי (גיבוי לעברית) ===
+const hebrewDictionary: Record<string, string> = {
+  'Itay Cohen': 'איתי כהן',
+  'Traffic Lights': 'רמזורים',
+  'Software': 'תוכנה',
+  'General': 'כללי'
+};
+
 const userCache = new Map<string, { data: any, timestamp: number }>();
-const CACHE_TTL_MINUTES = 60; // תוקף הזיכרון (שעה אחת). אפשר לשנות ל-24 שעות אם רוצים.
+const ipToUserCache = new Map<string, string>(); 
+const CACHE_TTL = 60 * 60 * 1000;
 
 function decodeNTLM(authHeader: string): string {
   try {
@@ -16,14 +23,15 @@ function decodeNTLM(authHeader: string): string {
     const userLen = buffer.readUInt16LE(36);
     const userOffset = buffer.readUInt32LE(40);
     const rawUser = buffer.slice(userOffset, userOffset + userLen);
-    let username = rawUser.toString('utf16le').replace(/\0/g, '');
     
+    let username = rawUser.toString('utf16le').replace(/\0/g, '').trim();
     if (!username || /^[\x00-\x1F]*$/.test(username)) {
-      username = rawUser.toString('utf8');
+      username = rawUser.toString('utf8').replace(/\0/g, '').trim();
     }
+    if (username.includes('\\')) username = username.split('\\')[1];
     return username;
   } catch (e) {
-    return 'אורח';
+    return '';
   }
 }
 
@@ -31,44 +39,69 @@ export async function getCurrentUser() {
   const headersList = await headers();
   const authHeader = headersList.get('authorization');
   
-  if (!authHeader) return { username: 'אורח' };
+  // תופסים את ה-IP הגולמי
+  let rawIp = headersList.get('x-forwarded-for') || headersList.get('remote-addr') || 'unknown';
+  
+  // === התיקון! חותכים את הפורט המשתנה ===
+  // הופך את "192.168.1.76:49222" ל-"192.168.1.76"
+  const clientIp = rawIp.split(',')[0].split(':')[0].trim();
 
-  const username = decodeNTLM(authHeader);
-  if (username === 'אורח') return { username };
+  let username = '';
 
-  // --- בדיקת זיכרון (החלק שחוסך את העומס!) ---
-  const cached = userCache.get(username);
+  // 1. קריאת הזיהוי הראשונית מהדפדפן
+  if (authHeader && authHeader.startsWith('NTLM ')) {
+    username = decodeNTLM(authHeader);
+    if (username) {
+      ipToUserCache.set(clientIp, username); // שומרים רק את ה-IP הנקי!
+    }
+  }
+
+  // 2. קסם הרענון: שליפה לפי IP נקי
+  if (!username && clientIp !== 'unknown') {
+    username = ipToUserCache.get(clientIp) || '';
+  }
+
+  // אם אחרי הכל לא מצאנו כלום, זה אורח
+  if (!username) {
+    return { username: 'אורח', displayName: 'אורח', department: 'כללי' };
+  }
+
+  // בדיקת זיכרון מטמון מול ה-AD
   const now = Date.now();
-  // אם יש לנו את המשתמש בזיכרון, ועדיין לא עברה שעה - נחזיר מיד!
-  if (cached && (now - cached.timestamp < CACHE_TTL_MINUTES * 600 * 1000)) {
-    console.log(`[Cache Hit] החזרת נתונים מהזיכרון עבור: ${username}`);
-    return cached.data;
+  if (userCache.has(username)) {
+    const cached = userCache.get(username)!;
+    if (now - cached.timestamp < CACHE_TTL) return cached.data;
   }
 
   try {
-    console.log(`[Cache Miss] מפעיל PowerShell מול השרת עבור: ${username}`);
-    // פקודת ה-PowerShell כולל קידוד UTF-8 לעברית
-    const psCommand = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ADUser -Identity "${username}" -Properties DisplayName,EmailAddress,Department,Title,telephoneNumber | Select-Object DisplayName,EmailAddress,Department,Title,telephoneNumber | ConvertTo-Json`;
+    const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "chcp 65001 >$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ADUser -Identity '${username}' -Properties DisplayName,Department | Select-Object DisplayName,Department | ConvertTo-Json"`;
 
-    const { stdout } = await execPromise(`powershell.exe -Command "${psCommand}"`, { encoding: 'utf8' });
-    const adData = JSON.parse(stdout);
+    // הפעלת הפקודה בשקט (מונע חלונות קופצים בשרת)
+    const { stdout } = await execPromise(psCommand, { 
+        encoding: 'utf8', 
+        windowsHide: true, 
+        maxBuffer: 1024 * 1024 
+    });
+    
+    let adData: any = {};
+    if (stdout && stdout.trim()) {
+       adData = JSON.parse(stdout);
+    }
+
+    const rawName = adData.DisplayName || username;
+    const rawDept = adData.Department || 'כללי';
 
     const fullUser = {
       username: username,
-      displayName: adData.DisplayName || '',
-      email: adData.EmailAddress || '',
-      department: adData.Department || '',
-      title: adData.Title || '',
-      phone: adData.telephoneNumber || ''
+      displayName: hebrewDictionary[rawName] || rawName,
+      department: hebrewDictionary[rawDept] || rawDept
     };
 
-    // --- שמירה לזיכרון לפעם הבאה ---
     userCache.set(username, { data: fullUser, timestamp: now });
-
     return fullUser;
 
   } catch (error) {
-    console.error("Failed to fetch AD data via PowerShell:", error);
-    return { username: username, error: "No AD data" };
+    console.error("AD Error:", error);
+    return { username, displayName: username, department: 'כללי' };
   }
 }
