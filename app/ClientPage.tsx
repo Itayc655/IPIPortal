@@ -482,14 +482,31 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                         ext: String(row.ext || '').trim()
                     }));
 
+                    // שומרים את הנתונים הנקיים ב-State של ספר הטלפונים
                     setPhonebookData(sanitizedData);
+
+                    // === התוספת שלנו: הגדרת מחלקת ברירת מחדל לפי המשתמש ===
+                    const userDept = initialUser?.department;
+
+                    if (userDept && userDept !== 'כללי') {
+                        // בודקים אילו מחלקות באמת קיימות כרגע בנתונים שמשכנו
+                        const existingDepts = Array.from(new Set(sanitizedData.map((row: any) => row.department).filter(Boolean)));
+
+                        // אם המחלקה של המשתמש קיימת ברשימה - נעביר אותו אליה מיד!
+                        if (existingDepts.includes(userDept)) {
+                            setSelectedDept(userDept);
+                        }
+                    }
+                    // =========================================================
                 }
             } catch (error) {
                 console.error("שגיאה בטעינת ספר טלפונים:", error);
             }
         };
         loadPhonebook();
-    }, []);
+    }, [initialUser]); // הוספנו פה את initialUser למערך התלויות כדי ש-React לא יכעס
+
+
 
 
     // שמירת נתונים
