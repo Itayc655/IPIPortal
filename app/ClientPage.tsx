@@ -1,6 +1,6 @@
 "use client";
 import * as XLSX from 'xlsx';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search, Plus, FileText, Trash2, X, Key, Lock, Unlock, Edit,
@@ -107,6 +107,8 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
     const [phonebookSearch, setPhonebookSearch] = useState("");
 
+
+
     // ==================== STATE ====================
     const [sections, setSections] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
@@ -139,6 +141,15 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
     const [showSecurityModal, setShowSecurityModal] = useState(false);
     const [securityInput, setSecurityInput] = useState("");
     const [pendingAction, setPendingAction] = useState<{ type: 'toggle' | 'copy', key: string, value: string } | null>(null);
+
+    // === רשימת המורשים לעריכה (Admins) ===
+    // רשימת המורשים - נהפוך את הכל לאותיות קטנות ליתר ביטחון
+    const authorizedAdmins = ['itayc', 'gals', 'michaelg'].map(u => u.toLowerCase());
+
+    // בדיקה חסינה - משווה את השם שלך באותיות קטנות לרשימה
+    const isUserAdmin = initialUser?.username
+        ? authorizedAdmins.includes(initialUser.username.toLowerCase())
+        : false;
 
 
     // ==================== LOAD DATA ====================
@@ -206,17 +217,39 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
         setShowCreateSectionModal(true);
     };
 
-    // --- שמירת פריט ---
     const handleSaveItem = async () => {
         const action = editingItemId ? 'update_item' : 'add_item';
+
+        // יצירת אובייקט נתונים חדש - ריק לגמרי!
+        const dataToSend: Record<string, any> = {};
+
+        // אנחנו עוברים *רק* על מה שמוגדר בסכימה הנוכחית
+        targetSection.schema.forEach((field: any) => {
+            const value = newItemData[field.key];
+            // אם יש ערך - נשלח אותו. אם אין - נשלח מחרוזת ריקה.
+            dataToSend[field.key] = (value !== undefined && value !== null) ? value : "";
+        });
+
+        // כאן הקסם: dataToSend מכיל עכשיו אך ורק שדות שקיימים בסכימה.
+        // כל שדה ישן (כמו ה-ckck היתום) פשוט לא נכנס לאובייקט הזה,
+        // וכשזה יישלח לשרת, ה-UPDATE ידרוס את ה-JSON הישן בחדש והנקי.
+
         await fetch('/api/sections', {
             method: 'POST',
-            body: JSON.stringify({ action, sectionId: targetSection.id, itemId: editingItemId, data: newItemData })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action,
+                sectionId: targetSection.id,
+                itemId: editingItemId,
+                data: dataToSend
+            })
         });
-        await fetchSections();
-        setShowAddItemModal(false); setNewItemData({}); setEditingItemId(null);
-    };
 
+        await fetchSections();
+        setShowAddItemModal(false);
+        setNewItemData({});
+        setEditingItemId(null);
+    };
     const openEditItemModal = (section: any, item: any) => {
         setTargetSection(section);
         setNewItemData({ ...item.data });
@@ -421,6 +454,15 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
     const [unlockedPasswords, setUnlockedPasswords] = useState<Record<string, number>>({});
 
     const [isPhonebookEditMode, setIsPhonebookEditMode] = useState(false);
+
+    const [selectedDept, setSelectedDept] = useState<string>('הכל');
+
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (isPhonebookEditMode) setSelectedDept('הכל');
+    }, [isPhonebookEditMode]);
+
     useEffect(() => {
         const loadPhonebook = async () => {
             try {
@@ -706,7 +748,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
         if (systemMessages.length <= 1 || isHovered) return;
         const timer = setInterval(() => {
             setCurrentMsgIndex((prev) => (prev + 1) % systemMessages.length);
-        }, 5000);
+        }, 2000);
         return () => clearInterval(timer);
     }, [systemMessages.length, isHovered]);
 
@@ -770,38 +812,69 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                 </div>
 
                 {/* 2. אמצע - פרטי המשתמש (עדין, אפור בהיר, מחוץ לקו של הכפתורים) */}
-                <div className="absolute top-2 2xl:top-4 left-1/2 -translate-x-1/2 text-center text-slate-400 text-lg 2xl:text-xl font-medium tracking-wide">
-                    <span>
-                        {initialUser?.displayName || initialUser?.username || 'אורח'}
-                    </span>
-                    <span className="mx-3 text-slate-200">|</span>
-                    <span>
-                        {initialUser?.department || 'כללי'}
-                    </span>
+                <div className="absolute top-2 2xl:top-4 left-1/2 -translate-x-1/2 text-center font-medium tracking-wide flex flex-col items-center">
+
+                    {/* שורה ראשונה: שם תצוגה | מחלקה */}
+                    <div className="text-slate-400 text-lg 2xl:text-xl">
+                        <span>
+                            {initialUser?.displayName || initialUser?.username || 'אורח'}
+                        </span>
+
+                        <span className="mx-3 text-slate-200">|</span>
+
+                        <span>
+                            {initialUser?.department || 'כללי'}
+                        </span>
+                    </div>
+
+                    {/* שורה שנייה: שם מחשב | שם משתמש (באמצע) | כתובת IP */}
+                    <div className="flex items-center justify-center text-slate-500 text-sm 2xl:text-base mt-1 2xl:mt-1.5">
+
+                        {/* שם מחשב (יופיע בצד אחד) */}
+                        <span dir="ltr" className="font-mono text-xs 2xl:text-sm mt-0.5">
+                            {initialUser?.computerName || 'N/A'}
+                        </span>
+
+                        <span className="mx-2 2xl:mx-3 text-slate-400">|</span>
+
+                        {/* שם משתמש (בדיוק באמצע) */}
+                        <span>
+                            {initialUser?.username || 'לא ידוע'}
+                        </span>
+
+                        <span className="mx-2 2xl:mx-3 text-slate-400">|</span>
+
+                        {/* כתובת IP (יופיע בצד השני) */}
+                        <span dir="ltr" className="font-mono text-xs 2xl:text-sm mt-0.5">
+                            {initialUser?.ipAddress || 'לא זמין'}
+                        </span>
+
+                    </div>
                 </div>
 
-                {/* 3. צד שמאל - טוגל עריכה המקורי שלך */}
-                <div className="w-48 flex justify-end">
-                    <button
-                        onClick={() => {
-                            if (isEditMode) {
-                                setIsEditMode(false);
-                                setIsPhonebookEditMode(false);
-                            } else {
-                                setShowLoginModal(true);
-                            }
-                        }}
-                        className={`flex items-center gap-2 2xl:gap-3 px-4 2xl:px-6 py-2 2xl:py-3 rounded-full font-bold text-sm 2xl:text-base cursor-pointer transition-all border shadow-sm 
+                {/* 3. צד שמאל - טוגל עריכה המקורי שלך (עכשיו מוגן בהרשאות!) */}
+                {isUserAdmin && (
+                    <div className="w-48 flex justify-end">
+                        <button
+                            onClick={() => {
+                                if (isEditMode) {
+                                    setIsEditMode(false);
+                                    setIsPhonebookEditMode(false);
+                                } else {
+                                    setShowLoginModal(true);
+                                }
+                            }}
+                            className={`flex items-center gap-2 2xl:gap-3 px-4 2xl:px-6 py-2 2xl:py-3 rounded-full font-bold text-sm 2xl:text-base cursor-pointer transition-all border shadow-sm 
                 ${isEditMode
-                                ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 hover:border-red-300 hover:text-red-700'
-                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300'
-                            }`}
-                    >
-                        {isEditMode ? <Unlock size={18} className="2xl:w-5 2xl:h-5" /> : <Lock size={18} className="2xl:w-5 2xl:h-5" />}
-                        {isEditMode ? 'עריכה פעילה' : 'צפייה'}
-                    </button>
-                </div>
-
+                                    ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 hover:border-red-300 hover:text-red-700'
+                                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300'
+                                }`}
+                        >
+                            {isEditMode ? <Unlock size={18} className="2xl:w-5 2xl:h-5" /> : <Lock size={18} className="2xl:w-5 2xl:h-5" />}
+                            {isEditMode ? 'עריכה פעילה' : 'צפייה'}
+                        </button>
+                    </div>
+                )}
             </header>
             {/* MAIN CONTENT */}
             <main className="w-full max-w-[1800px] mx-auto px-4 lg:px-6 pb-32">
@@ -811,11 +884,10 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                 <section className="mt-4 2xl:mt-10 mb-8 2xl:mb-24 relative text-center">
                     <h2
                         className="text-3xl 2xl:text-5xl font-black mb-4 2xl:mb-8 tracking-tight text-slate-800"
-                        style={{ WebkitTextStroke: '1px currentColor' }}
+                        style={{ WebkitTextStroke: '2px currentColor' }}
                     >
                         מרכז המידע והנהלים
-                    </h2>
-                    <div className="max-w-2xl 2xl:max-w-3xl mx-auto relative">
+                    </h2>                    <div className="max-w-2xl 2xl:max-w-3xl mx-auto relative">
                         <Search className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 2xl:w-7 2xl:h-7" />
                         <input className="w-full pr-14 2xl:pr-16 pl-6 py-3 2xl:py-6 rounded-2xl 2xl:rounded-3xl border-none shadow-xl 2xl:shadow-2xl text-base 2xl:text-xl font-medium outline-none focus:ring-4 focus:ring-red-600/10 transition-all" placeholder="חפש מוצרים, סיסמאות או נהלים..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                     </div>
@@ -961,17 +1033,85 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                         return (
                                             <div
                                                 key={item.id}
-                                                onClick={() => setViewItem({ item, section })}
+
+                                                onClick={() => {
+                                                    try {
+                                                        // 1. אם אנחנו במצב עריכה - פותח מודל רגיל
+                                                        if (isEditMode) {
+                                                            setViewItem({ item, section });
+                                                            return;
+                                                        }
+
+                                                        let foundUrl = null;
+                                                        let foundUrlKey = null;
+
+                                                        // 2. חיפוש הלינק בתוך הנתונים
+                                                        if (item?.data) {
+                                                            for (const key in item.data) {
+                                                                const val = item.data[key];
+                                                                if (typeof val === 'string' && (val.startsWith('http') || val.startsWith('www.'))) {
+                                                                    foundUrl = val.startsWith('www.') ? 'https://' + val : val;
+                                                                    foundUrlKey = key;
+                                                                    break;
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // 3. ניקוי אגרסיבי של "רוחות רפאים" (HTML ריק)
+                                                        let hasExtraContent = false;
+                                                        if (item?.data) {
+                                                            const titleKey = section?.schema?.[0]?.key;
+
+                                                            for (const key in item.data) {
+                                                                // מדלגים על הלינק ועל הכותרת
+                                                                if (key === foundUrlKey || key === titleKey) continue;
+
+                                                                const val = item.data[key];
+                                                                let isEmpty = false;
+
+                                                                if (val === null || val === undefined) {
+                                                                    isEmpty = true;
+                                                                } else if (typeof val === 'string') {
+                                                                    // הקסם האמיתי: מוחק כל תגית HTML (<...>) וכל רווח בלתי נראה (&nbsp;)
+                                                                    const cleanVal = val.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, '').trim();
+                                                                    if (cleanVal === '') {
+                                                                        isEmpty = true;
+                                                                    }
+                                                                } else if (Array.isArray(val) && val.length === 0) {
+                                                                    isEmpty = true;
+                                                                }
+
+                                                                // אם אחרי כל הניקוי האגרסיבי השדה עדיין לא ריק - יש פה תוכן אמיתי!
+                                                                if (!isEmpty) {
+                                                                    console.log(`🕵️‍♂️ Found content blocking the link in key: [${key}]`, val);
+                                                                    hasExtraContent = true;
+                                                                    break;
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // 4. פתיחה
+                                                        if (foundUrl && !hasExtraContent) {
+                                                            window.open(foundUrl, '_blank', 'noopener,noreferrer');
+                                                        } else {
+                                                            setViewItem({ item, section });
+                                                        }
+
+                                                    } catch (error) {
+                                                        console.error("Card click error:", error);
+                                                        setViewItem({ item, section });
+                                                    }
+                                                }}
                                                 className={`
-                                                relative group flex flex-col items-center justify-center text-center 
-                                                h-[130px] 2xl:h-[200px] p-4 2xl:p-5
-                                                bg-white rounded-[1.2rem] 2xl:rounded-[1.5rem] border-2 ${theme.border}
-                                                shadow-lg ${theme.shadow}
-                                                bg-gradient-to-br hover:border-transparent ${theme.gradientFrom} ${theme.gradientTo}
-                                                hover:shadow-xl ${theme.hoverShadow}
-                                                transition-all duration-500 ease-in-out hover:-translate-y-1
-                                                cursor-pointer overflow-hidden
-                                            `}
+    relative group flex flex-col items-center justify-center text-center 
+    h-[130px] 2xl:h-[200px] p-4 2xl:p-5
+    bg-white rounded-[1.2rem] 2xl:rounded-[1.5rem] border-2 ${theme.border}
+    shadow-lg ${theme.shadow}
+    bg-gradient-to-br hover:border-transparent ${theme.gradientFrom} ${theme.gradientTo}
+    hover:shadow-xl ${theme.hoverShadow}
+    transition-all duration-500 ease-in-out hover:-translate-y-1
+    cursor-pointer overflow-hidden
+    `}
                                             >
                                                 {/* הקטנת אייקון הרקע בלפטופ */}
                                                 <div className={`absolute -right-4 2xl:-right-6 -bottom-4 2xl:-bottom-6 rotate-12 transition-all duration-700 group-hover:rotate-0 group-hover:scale-110 group-hover:text-white/10 ${theme.iconColor} scale-75 2xl:scale-100`}>
@@ -985,12 +1125,13 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                 </div>
 
                                                 <div className={`
-                                                absolute bottom-3 2xl:bottom-4 text-[10px] font-bold px-3 2xl:px-4 py-1 2xl:py-1.5 rounded-full
-                                                bg-white/20 backdrop-blur-md text-white border border-white/30
-                                                opacity-0 translate-y-3 group-hover:opacity-100 group-hover:translate-y-0
-                                                transition-all duration-500 delay-100 shadow-sm
-                                            `}>
-                                                    לחץ לצפייה
+    absolute bottom-3 2xl:bottom-4 text-[10px] font-bold px-3 2xl:px-4 py-1 2xl:py-1.5 rounded-full
+    bg-white/20 backdrop-blur-md text-white border border-white/30
+    opacity-0 translate-y-3 group-hover:opacity-100 group-hover:translate-y-0
+    transition-all duration-500 delay-100 shadow-sm
+    `}>
+                                                    {/* שינוי טקסט דינמי: אם זה רק לינק, נכתוב "פתח קישור", אחרת "לחץ לצפייה" */}
+                                                    {item.data.url && !Object.keys(item.data).some(key => key !== 'url' && key !== section.schema[0]?.key && item.data[key] && (!Array.isArray(item.data[key]) || item.data[key].length > 0)) ? 'פתח קישור ↗' : 'לחץ לצפייה'}
                                                 </div>
 
                                                 {isEditMode && (
@@ -1045,7 +1186,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                         <div>
                             <div className="flex items-center gap-3 mb-2">
                                 <div className="h-8 w-1.5 bg-amber-500 rounded-full"></div>
-                                <h2 className="text-3xl font-black text-slate-800 tracking-tight">ספר טלפונים ארגוני</h2>
+                                <h2 className="text-3xl font-black text-slate-800 tracking-tight">ספר טלפונים </h2>
                             </div>
                             <p className="text-slate-500 font-medium mr-4">ניהול רשימת קשר ומידע מחלקתי</p>
                         </div>
@@ -1106,60 +1247,103 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                             </div>
                         )}
 
-                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePhonebookDragEnd}>
-                            <div className="overflow-x-auto w-full px-2 2xl:px-6">
-                                <table className="w-full table-fixed text-right border-separate border-spacing-y-2 2xl:border-spacing-y-3">
-                                    <thead>
-                                        <tr className="text-amber-700">
-                                            {/* עמודה לכפתור הגרירה */}
-                                            {isPhonebookEditMode && <th className="w-8"></th>}
-
-                                            {phonebookSchema.filter(col => isPhonebookEditMode || col.key !== 'birthday').map(col => (
-                                                <th key={col.key} className={`${col.width} px-2 py-2 2xl:py-4 text-xs 2xl:text-lg font-black uppercase tracking-tight text-right`}>
-                                                    <span className="drop-shadow-sm truncate block">{col.label}</span>
-                                                </th>
-                                            ))}
-
-                                            {/* עמודה לפח האשפה */}
-                                            {isPhonebookEditMode && <th className="w-12"></th>}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-
-                                        {(() => {
-                                            // סינון השורות לפי החיפוש
-                                            const filteredRows = phonebookData.filter(row => {
-                                                if (!phonebookSearch) return true;
-                                                return Object.values(row).some(val =>
-                                                    String(val).toLowerCase().includes(phonebookSearch.toLowerCase())
-                                                );
-                                            });
-
-                                            if (filteredRows.length === 0) {
-                                                return <tr><td colSpan={10} className="text-center py-20 text-slate-300 font-bold text-xl italic">לא נמצאו תוצאות לחיפוש...</td></tr>;
+                        {/* --- שורת טאבים (מחלקות) - מוצגת רק במצב צפייה --- */}
+                        {!isPhonebookEditMode && (
+                            <div className="flex flex-wrap justify-center gap-2 2xl:gap-3 mt-8 mb-6 px-2">
+                                {['הכל', ...Array.from(new Set(phonebookData.map(row => row.department).filter(Boolean)))].map(dept => (
+                                    <button
+                                        key={dept as string}
+                                        onClick={() => {
+                                            setSelectedDept(dept as string);
+                                            // השלט הרחוק שמחזיר אותנו למעלה!
+                                            if (scrollContainerRef.current) {
+                                                scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
                                             }
+                                        }}
+                                        className={`px-5 py-2 2xl:py-2.5 rounded-full font-bold text-sm 2xl:text-base transition-all shadow-sm cursor-pointer
+        ${selectedDept === dept
+                                                ? 'bg-amber-500 text-white shadow-amber-500/30 scale-105'
+                                                : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 hover:text-amber-600'
+                                            }`}
+                                    >
+                                        {dept as string}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePhonebookDragEnd}>
+                            <div className="w-full px-2 2xl:px-6">
 
-                                            return (
-                                                <SortableContext items={filteredRows.map(row => row.id)} strategy={verticalListSortingStrategy}>
-                                                    {filteredRows.map((row) => (
-                                                        <SortableRow
-                                                            key={row.id}
-                                                            row={row}
-                                                            phonebookSchema={phonebookSchema}
-                                                            isPhonebookEditMode={isPhonebookEditMode}
-                                                            updatePhonebookCell={updatePhonebookCell}
-                                                            deletePhonebookRow={deletePhonebookRow}
-                                                        />
-                                                    ))}
-                                                </SortableContext>
-                                            );
-                                        })()}
-                                    </tbody>
-                                </table>
+                                {/* קופסת הגלילה החכמה */}
+                                <div
+                                    ref={scrollContainerRef}
+                                    className="max-h-[50vh] 2xl:max-h-[60vh] overflow-y-auto overflow-x-hidden rounded-[2rem] pb-2 pt-0 px-2 pr-4 
+    [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent 
+    [&::-webkit-scrollbar-thumb]:bg-amber-200 [&::-webkit-scrollbar-thumb]:rounded-full 
+    hover:[&::-webkit-scrollbar-thumb]:bg-amber-300 transition-colors duration-300">
+
+                                    <table className="w-full table-fixed text-right border-separate border-spacing-y-2 2xl:border-spacing-y-3 relative">
+
+                                        {/* כותרת דביקה שלא בורחת בגלילה */}
+                                        <thead className="sticky top-0 z-50">
+                                            <tr className="text-amber-700 relative z-50">
+                                                {isPhonebookEditMode && <th className="w-8 rounded-r-2xl bg-white shadow-[0_-15px_0_0_white,0_4px_6px_-1px_rgba(0,0,0,0.05)]"></th>}
+
+                                                {phonebookSchema.filter(col => isPhonebookEditMode || col.key !== 'birthday').map((col, idx, arr) => (
+                                                    <th key={col.key} className={`
+                ${col.width} px-2 py-3 2xl:py-5 text-xs 2xl:text-lg font-black uppercase tracking-tight text-right 
+                bg-white shadow-[0_-15px_0_0_white,0_4px_6px_-1px_rgba(0,0,0,0.05)]
+                ${!isPhonebookEditMode && idx === 0 ? 'rounded-r-2xl' : ''}
+                ${!isPhonebookEditMode && idx === arr.length - 1 ? 'rounded-l-2xl' : ''}
+            `}>
+                                                        <span className="drop-shadow-sm truncate block">{col.label}</span>
+                                                    </th>
+                                                ))}
+
+                                                {isPhonebookEditMode && <th className="w-12 rounded-l-2xl bg-white shadow-[0_-15px_0_0_white,0_4px_6px_-1px_rgba(0,0,0,0.05)]"></th>}
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            {(() => {
+                                                // סינון כפול: גם לפי חיפוש טקסט וגם לפי טאב המחלקה
+                                                const filteredRows = phonebookData.filter(row => {
+                                                    // 1. סינון מחלקה
+                                                    if (selectedDept !== 'הכל' && row.department !== selectedDept) return false;
+
+                                                    // 2. סינון טקסט חופשי
+                                                    if (phonebookSearch) {
+                                                        return Object.values(row).some(val =>
+                                                            String(val).toLowerCase().includes(phonebookSearch.toLowerCase())
+                                                        );
+                                                    }
+                                                    return true;
+                                                });
+
+                                                if (filteredRows.length === 0) {
+                                                    return <tr><td colSpan={10} className="text-center py-20 text-slate-300 font-bold text-xl italic bg-white/50 rounded-2xl">לא נמצאו תוצאות למחלקה או לחיפוש...</td></tr>;
+                                                }
+
+                                                return (
+                                                    <SortableContext items={filteredRows.map(row => row.id)} strategy={verticalListSortingStrategy}>
+                                                        {filteredRows.map((row) => (
+                                                            <SortableRow
+                                                                key={row.id}
+                                                                row={row}
+                                                                phonebookSchema={phonebookSchema}
+                                                                isPhonebookEditMode={isPhonebookEditMode}
+                                                                updatePhonebookCell={updatePhonebookCell}
+                                                                deletePhonebookRow={deletePhonebookRow}
+                                                            />
+                                                        ))}
+                                                    </SortableContext>
+                                                );
+                                            })()}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </DndContext>
-
-
                     </div>
                 </div>
 

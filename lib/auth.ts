@@ -1,16 +1,10 @@
 import { headers } from 'next/headers';
 import { exec } from 'child_process';
 import util from 'util';
+import dns from 'dns/promises';
 
 const execPromise = util.promisify(exec);
 
-// === מילון תרגום אישי (גיבוי לעברית) ===
-const hebrewDictionary: Record<string, string> = {
-  'Itay Cohen': 'איתי כהן',
-  'Traffic Lights': 'רמזורים',
-  'Software': 'תוכנה',
-  'General': 'כללי'
-};
 
 const userCache = new Map<string, { data: any, timestamp: number }>();
 const ipToUserCache = new Map<string, string>(); 
@@ -33,6 +27,19 @@ function decodeNTLM(authHeader: string): string {
   } catch (e) {
     return '';
   }
+}
+
+async function getComputerName(ip: string) {
+  try {
+    if (!ip || ip === '::1' || ip === '127.0.0.1' || ip === 'unknown') return 'Localhost';
+    const hostnames = await dns.reverse(ip);
+    if (hostnames && hostnames.length > 0) {
+      return hostnames[0].split('.')[0].toUpperCase(); // חותך את הדומיין ומשאיר רק את שם המחשב באותיות גדולות
+    }
+  } catch (error) {
+    // אם ה-DNS לא מכיר את ה-IP
+  }
+  return 'N/A';
 }
 
 export async function getCurrentUser() {
@@ -73,35 +80,52 @@ export async function getCurrentUser() {
     if (now - cached.timestamp < CACHE_TTL) return cached.data;
   }
 
-  try {
-    const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "chcp 65001 >$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ADUser -Identity '${username}' -Properties DisplayName,Department | Select-Object DisplayName,Department | ConvertTo-Json"`;
+  // רשימת שרתי ה-AD
+  const adServers = ['192.168.1.243', '192.168.1.244']; 
+  let adData: any = null;
 
-    // הפעלת הפקודה בשקט (מונע חלונות קופצים בשרת)
-    const { stdout } = await execPromise(psCommand, { 
-        encoding: 'utf8', 
-        windowsHide: true, 
-        maxBuffer: 1024 * 1024 
-    });
-    
-    let adData: any = {};
-    if (stdout && stdout.trim()) {
-       adData = JSON.parse(stdout);
+  for (const server of adServers) {
+    try {
+      // === התיקון: מבקשים רק Name ו-Department ===
+      const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "chcp 65001 >$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ADUser -Identity '${username}' -Server '${server}' -Properties Name,Department | Select-Object Name,Department | ConvertTo-Json"`;
+
+      const { stdout } = await execPromise(psCommand, { 
+          encoding: 'utf8', 
+          windowsHide: true, 
+          maxBuffer: 1024 * 1024 
+      });
+      
+      if (stdout && stdout.trim()) {
+         adData = JSON.parse(stdout);
+         break; 
+      }
+    } catch (error) {
+      console.warn(`⚠️ שרת AD בכתובת ${server} לא הגיב, מנסה את השרת הבא...`);
     }
+  }
 
-    const rawName = adData.DisplayName || username;
-    const rawDept = adData.Department || 'כללי';
+ // מושכים את שם המחשב על בסיס ה-IP
+  const computerName = await getComputerName(clientIp);
 
+  if (!adData) {
+      console.error("❌ תקלה קריטית: אף שרת AD לא זמין!");
+      return { username, displayName: username, department: 'כללי', ipAddress: clientIp, computerName };
+  }
+
+  try {
     const fullUser = {
       username: username,
-      displayName: hebrewDictionary[rawName] || rawName,
-      department: hebrewDictionary[rawDept] || rawDept
+      displayName: adData.Name || username,
+      department: adData.Department || 'כללי',
+      ipAddress: clientIp,
+      computerName: computerName // <--- הוספנו את שם המחשב!
     };
 
     userCache.set(username, { data: fullUser, timestamp: now });
     return fullUser;
 
   } catch (error) {
-    console.error("AD Error:", error);
-    return { username, displayName: username, department: 'כללי' };
+    console.error("AD Parsing Error:", error);
+    return { username, displayName: username, department: 'כללי', ipAddress: clientIp, computerName };
   }
 }
