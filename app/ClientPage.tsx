@@ -105,9 +105,6 @@ function SortableField({ field, idx, updateFieldInSchema, removeFieldFromSchema 
 
 export default function DynamicIPIDashboard({ initialUser }: any) {
 
-    const [phonebookSearch, setPhonebookSearch] = useState("");
-
-
 
     // ==================== STATE ====================
     const [sections, setSections] = useState<any[]>([]);
@@ -738,6 +735,8 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
     const [newMsgText, setNewMsgText] = useState("");
     const [isHovered, setIsHovered] = useState(false);
 
+
+
     // חישוב התאריך של היום להצגה דינמית
     const today = new Date();
     const todayFormatted = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
@@ -769,6 +768,29 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
         return () => clearInterval(timer);
     }, [systemMessages.length, isHovered]);
 
+
+    // מעבר אוטומטי לטאב "הכל" בזמן חיפוש, וחזרה למחלקה של המשתמש בסיום החיפוש
+    useEffect(() => {
+        if (searchTerm.trim() !== '') {
+            // 1. בזמן שמקלידים חיפוש - תמיד מציגים את כל הארגון כדי למצוא את כולם
+            setSelectedDept('הכל');
+        } else {
+            // 2. כשהחיפוש נמחק לגמרי - מנסים לחזור למחלקה המקורית של המשתמש
+            const userDept = initialUser?.department;
+
+            // בודקים שיש נתונים, שלמשתמש יש מחלקה, ושהיא באמת קיימת בספר כרגע
+            if (phonebookData && userDept && userDept !== 'כללי') {
+                const existingDepts = Array.from(new Set(phonebookData.map((row: any) => row?.department).filter(Boolean)));
+                if (existingDepts.includes(userDept)) {
+                    setSelectedDept(userDept);
+                    return; // מצאנו והחזרנו את המחלקה, אפשר לסיים פה
+                }
+            }
+            // 3. אם משהו התפקשש או שאין למשתמש מחלקה מוגדרת, ברירת המחדל היא "הכל"
+            setSelectedDept('הכל');
+        }
+    }, [searchTerm, phonebookData, initialUser]);
+    // ^ הוספנו פה למטה את phonebookData ו-initialUser כדי ש-React תמיד יעבוד עם הנתונים הכי עדכניים
     // הוספת הודעה + שמירה ב-SQL
     const addSystemMessage = async () => {
         if (!newMsgText.trim()) return;
@@ -818,14 +840,25 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
                 {/* 1. צד ימין - אזור הלוגו המקורי שלך */}
                 <div className="flex items-center gap-4 w-48">
-                    <div className="relative w-20 h-20 2xl:w-24 2xl:h-24 group cursor-pointer">
+
+                    {/* התמונה הפכה לקישור עם אפקט לחיצה וגדילה */}
+                    <a
+                        href="https://www.ipi.co.il" // <-- כאן הקישור לאתר
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative w-20 h-20 2xl:w-24 2xl:h-24 group cursor-pointer block transition-transform duration-300 hover:scale-105 active:scale-95"
+                        title="מעבר לאתר IPI"
+                    >
                         <img src="/logo-red.png" alt="IPI Logo" className="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 opacity-100 group-hover:opacity-0" />
                         <img src="/logo-blue.png" alt="IPI Logo Hover" className="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 opacity-0 group-hover:opacity-100" />
-                    </div>
+                    </a>
+
+                    
                     <div className="flex flex-col text-right">
                         <h1 className="text-3xl 2xl:text-4xl font-black text-red-600 leading-none tracking-tight">פורטל</h1>
                         <span className="text-base 2xl:text-lg text-red-600 font-medium tracking-wide">IPI Portal</span>
                     </div>
+
                 </div>
 
                 {/* 2. אמצע - פרטי המשתמש (עדין, אפור בהיר, מחוץ לקו של הכפתורים) */}
@@ -895,20 +928,6 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
             </header>
             {/* MAIN CONTENT */}
             <main className="w-full max-w-[1800px] mx-auto px-4 lg:px-6 pb-32">
-
-
-                {/* SEARCH */}
-                <section className="mt-4 2xl:mt-10 mb-8 2xl:mb-24 relative text-center">
-                    <h2
-                        className="text-3xl 2xl:text-5xl font-black mb-4 2xl:mb-8 tracking-tight text-slate-800"
-                        style={{ WebkitTextStroke: '2px currentColor' }}
-                    >
-                        מרכז המידע והנהלים
-                    </h2>                    <div className="max-w-2xl 2xl:max-w-3xl mx-auto relative">
-                        <Search className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 2xl:w-7 2xl:h-7" />
-                        <input className="w-full pr-14 2xl:pr-16 pl-6 py-3 2xl:py-6 rounded-2xl 2xl:rounded-3xl border-none shadow-xl 2xl:shadow-2xl text-base 2xl:text-xl font-medium outline-none focus:ring-4 focus:ring-red-600/10 transition-all" placeholder="חפש מוצרים, סיסמאות או נהלים..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                    </div>
-                </section>
 
                 {/* ==================== אזור הודעות מערכת ==================== */}
                 {(!isEditMode && systemMessages.length === 0) ? null : (
@@ -989,9 +1008,20 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                     </section>
                 )}
 
+
+                {/* SEARCH */}
+                <section className="mt-4 2xl:mt-10 mb-8 2xl:mb-24 relative text-center">
+                    <div className="max-w-2xl 2xl:max-w-3xl mx-auto relative">
+                        <Search className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 2xl:w-7 2xl:h-7" />
+                        <input className="w-full pr-14 2xl:pr-16 pl-6 py-3 2xl:py-6 rounded-2xl 2xl:rounded-3xl border-none shadow-xl 2xl:shadow-2xl text-base 2xl:text-xl font-medium outline-none focus:ring-4 focus:ring-red-600/10 transition-all" placeholder="חפש מוצרים, אנשי קשר או נהלים..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                    </div>
+                </section>
+
+
                 {/* SECTIONS LOOP */}
                 <div className="relative w-full">
-                    <BirthdayTicker />
+                    {/* נציג את ימי ההולדת רק אם שורת החיפוש ריקה */}
+                    {searchTerm.trim() === '' && <BirthdayTicker />}
 
                     {sections.map(section => {
                         const colors = getColorClasses(section.color);
@@ -1210,16 +1240,6 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
                         {/* --- רכיב החיפוש החדש --- */}
                         <div className="flex gap-4 items-center">
-                            <div className="relative">
-                                <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                <input
-                                    className="bg-white border border-slate-200 pr-11 pl-4 py-2.5 rounded-2xl outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all w-64 font-bold text-slate-700"
-                                    placeholder="חיפוש מהיר בטבלה..."
-                                    value={phonebookSearch}
-                                    onChange={(e) => setPhonebookSearch(e.target.value)}
-                                />
-                            </div>
-
                             {isEditMode && (
                                 <button
                                     onClick={() => setIsPhonebookEditMode(!isPhonebookEditMode)}
@@ -1329,9 +1349,9 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                     if (selectedDept !== 'הכל' && row.department !== selectedDept) return false;
 
                                                     // 2. סינון טקסט חופשי
-                                                    if (phonebookSearch) {
+                                                    if (searchTerm) {
                                                         return Object.values(row).some(val =>
-                                                            String(val).toLowerCase().includes(phonebookSearch.toLowerCase())
+                                                            String(val).toLowerCase().includes(searchTerm.toLowerCase())
                                                         );
                                                     }
                                                     return true;
