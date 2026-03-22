@@ -123,7 +123,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
 
     // ==================== ניהול מצב (STATE) ====================
-    
+
     // --- סטייט מערכת כללי ---
     const [sections, setSections] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
@@ -142,6 +142,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
     const [targetSection, setTargetSection] = useState<any>(null);
     const [newItemData, setNewItemData] = useState<any>({});
     const [editingItemId, setEditingItemId] = useState<number | null>(null);
+    const [newItemVisibility, setNewItemVisibility] = useState<string[]>(['הכל']);
 
     // --- סטייט צפייה בפריט קיים ---
     const [viewItem, setViewItem] = useState<{ item: any, section: any } | null>(null);
@@ -179,7 +180,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
     // ==================== רפרנסים וחיישנים (REFS & SENSORS) ====================
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    
+
     // חיישני גרירה (DND)
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -189,13 +190,24 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
     // ==================== אפקטים (USE EFFECTS) ====================
 
-    // טעינה ראשונית: מחלקות וכרטיסיות
-    useEffect(() => { fetchSections(); }, []);
+ // הוספנו את isEditMode ו-initialUser כדי שהמערכת תרענן את המידע כשהם משתנים
+    useEffect(() => { 
+        fetchSections(); 
+    }, [isEditMode, initialUser]);
+
     const fetchSections = async () => {
         try {
-            const res = await fetch('/api/sections');
+            // 1. אוספים את "תעודת הזהות" של המשתמש המחובר
+            const userDept = initialUser?.department || '';
+            const editModeParam = isEditMode ? 'true' : 'false';
+
+            // 2. שולחים את הבקשה החכמה לשרת המאובטח שלנו (עם encodeURIComponent למקרה שיש רווחים בשם המחלקה)
+            const res = await fetch(`/api/sections?department=${encodeURIComponent(userDept)}&editMode=${editModeParam}`);
+            
             if (res.ok) setSections(await res.json());
-        } catch (e) { console.error(e); }
+        } catch (e) { 
+            console.error("שגיאה במשיכת הנתונים המאובטחים:", e); 
+        }
     };
 
     // טעינה ראשונית: הודעות מערכת
@@ -335,28 +347,45 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
         const action = editingItemId ? 'update_item' : 'add_item';
         const dataToSend: Record<string, any> = {};
 
-        // איסוף שדות רק לפי הסכמה כדי למנוע זבל
         targetSection.schema.forEach((field: any) => {
             const value = newItemData[field.key];
             dataToSend[field.key] = (value !== undefined && value !== null) ? value : "";
         });
 
+        // 1. הופכים את מערך הצ'קבוקסים לטקסט שיישמר בשרת
+        const visibilityString = newItemVisibility.includes('הכל') ? 'הכל' : newItemVisibility.join(',');
+
         await fetch('/api/sections', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action, sectionId: targetSection.id, itemId: editingItemId, data: dataToSend })
+            body: JSON.stringify({ 
+                action, 
+                sectionId: targetSection.id, 
+                itemId: editingItemId, 
+                data: dataToSend,
+                visibility: visibilityString // 2. שולחים את ההרשאות ל-SQL!
+            })
         });
 
         await fetchSections();
         setShowAddItemModal(false);
         setNewItemData({});
         setEditingItemId(null);
+        setNewItemVisibility(['הכל']); // איפוס
     };
 
     const openEditItemModal = (section: any, item: any) => {
         setTargetSection(section);
         setNewItemData({ ...item.data });
         setEditingItemId(item.id);
+        
+        // 3. כשפותחים פריט לעריכה - קוראים את ההרשאות שלו
+        if (item.visibility && item.visibility !== 'הכל' && item.visibility.trim() !== '') {
+            setNewItemVisibility(item.visibility.split(',').map((s: string) => s.trim()));
+        } else {
+            setNewItemVisibility(['הכל']);
+        }
+        
         setShowAddItemModal(true);
     };
 
@@ -749,7 +778,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                 {/* --- אזור 1: הודעות מערכת רצות (System Messages) --- */}
                 {(!isEditMode && systemMessages.length === 0) ? null : (
                     <section className="mb-12 2xl:mb-16 max-w-3xl xl:max-w-4xl 2xl:max-w-5xl mx-auto relative z-10 px-4">
-                        
+
                         {/* תצוגת ההודעות בפועל */}
                         {systemMessages.length > 0 && (
                             <div
@@ -826,16 +855,31 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
                 {/* --- אזור 3: קטגוריות ומוצרים (Sections Loop) --- */}
                 <div className="relative w-full">
-                    
+
                     {/* באנר ימי ההולדת מופיע בצד רק אם שורת החיפוש ריקה */}
                     {searchTerm.trim() === '' && <BirthdayTicker />}
 
                     {/* לולאה שעוברת על כל הקטגוריות במערכת */}
                     {sections.map(section => {
                         const colors = getColorClasses(section.color);
-                        
-                        // סינון פריטים בקטגוריה בהתאם לשורת החיפוש
+
+                     // סינון פריטים בקטגוריה (גם לפי חיפוש וגם לפי הרשאות!)
                         const visibleItems = section.items.filter((item: any) => {
+                            
+                            // 1. סינון לפי הרשאות צפייה של הכרטיסייה
+                            const visibilityStr = item.visibility || 'הכל';
+                            if (!isEditMode && visibilityStr !== 'הכל') {
+                                const userDept = initialUser?.department?.toLowerCase() || "";
+                                const userName = initialUser?.username?.toLowerCase() || "";
+                                const allowedUsersOrDepts = visibilityStr.toLowerCase().split(',').map((s: string) => s.trim());
+                                
+                                // אם המחלקה או השם שלו לא ברשימה - הוא לא יראה את הכרטיסייה
+                                if (!allowedUsersOrDepts.includes(userDept) && !allowedUsersOrDepts.includes(userName)) {
+                                    return false; 
+                                }
+                            }
+
+                            // 2. סינון לפי חיפוש טקסט רגיל
                             if (!searchTerm) return true;
                             return Object.entries(item.data).some(([key, val]: any) => {
                                 if (Array.isArray(val)) return val.some((f: any) => f.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -848,7 +892,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
                         return (
                             <section key={section.id} className="mb-12 2xl:mb-20 lg:pl-[270px] xl:pl-[290px] 2xl:pl-[320px]">
-                                
+
                                 {/* כותרת הקטגוריה ופעולות עריכה */}
                                 <div className="flex items-center gap-3 2xl:gap-4 mb-6 2xl:mb-10">
                                     <h2 className={`text-2xl 2xl:text-3xl font-black flex items-center gap-3 2xl:gap-4 text-slate-800`}>
@@ -904,7 +948,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                                     const cleanVal = val.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, '').trim();
                                                                     if (cleanVal === '') isEmpty = true;
                                                                 } else if (Array.isArray(val) && val.length === 0) isEmpty = true;
-                                                                
+
                                                                 if (!isEmpty) { hasExtraContent = true; break; }
                                                             }
                                                         }
@@ -918,6 +962,15 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                 <div className={`absolute -right-4 2xl:-right-6 -bottom-4 2xl:-bottom-6 rotate-12 transition-all duration-700 group-hover:rotate-0 group-hover:scale-110 group-hover:text-white/10 ${theme.iconColor} scale-75 2xl:scale-100`}>
                                                     <FileText size={90} />
                                                 </div>
+
+                                                {/* תגית הרשאות שמופיעה רק למנהל על הכרטיסייה עצמה */}
+                                                {isEditMode && item.visibility && item.visibility !== 'הכל' && (
+                                                    <div className="absolute top-3 right-3 z-30 pointer-events-none">
+                                                        <span className="bg-slate-900 text-white text-[10px] 2xl:text-xs font-bold px-2.5 py-1 rounded-md shadow-md border border-slate-700 opacity-90">
+                                                            🔒 מוגבל: {item.visibility}
+                                                        </span>
+                                                    </div>
+                                                )}
 
                                                 {/* כותרת הכרטיסייה */}
                                                 <div className="relative z-10 flex flex-col items-center gap-2 transition-colors duration-300 w-full">
@@ -1003,7 +1056,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
                     {/* מסגרת הטבלה ופעולות נוספות */}
                     <div className={`w-full relative bg-white rounded-[2.5rem] border-2 border-amber-100 shadow-[0_20px_50px_rgba(245,158,11,0.05)] overflow-hidden bg-gradient-to-br from-white via-white to-amber-50/30`}>
-                        
+
                         {/* כפתורי הוספה ואקסל (מוצג במצב עריכת טבלה) */}
                         {isPhonebookEditMode && (
                             <div className="p-8 border-t border-amber-50 flex justify-center gap-4 bg-amber-50/30 flex-wrap">
@@ -1111,7 +1164,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-6 animate-in fade-in duration-200" onClick={() => setViewItem(null)}>
                         <div className="bg-white rounded-[2.5rem] w-full max-w-3xl shadow-2xl relative border border-gray-100 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                             <button onClick={() => setViewItem(null)} className="absolute top-8 left-8 text-slate-400 cursor-pointer hover:text-slate-600 bg-slate-50 p-3 rounded-full hover:bg-slate-100 transition"><X size={28} /></button>
-                            
+
                             <div className="p-10 pb-6 border-b border-slate-100">
                                 <h2 className={`text-5xl font-black ${colors.text} mb-3`}>{viewItem.item.data[viewItem.section.schema[0].key]}</h2>
                                 {viewItem.section.schema[1] && viewItem.section.schema[1].type === 'text' && viewItem.item.data[viewItem.section.schema[1].key] && (
@@ -1123,7 +1176,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                 {/* לולאה דינמית שמרנדרת שדות בהתאם לסכמה של הקטגוריה */}
                                 {viewItem.section.schema.slice(viewItem.section.schema[1]?.type === 'text' ? 2 : 1).map((field: any) => {
                                     const rawVal = viewItem.item.data[field.key];
-                                    
+
                                     // הגנות מפני נתונים חסרים או לא תואמים לסוג השדה
                                     if (rawVal === undefined || rawVal === null || rawVal === '') return null;
                                     const isArray = Array.isArray(rawVal);
@@ -1269,6 +1322,31 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                             <h2 className="text-3xl font-black mb-8 pr-4">
                                 {editingItemId ? 'עריכת פריט ב' : 'הוסף פריט ל'}<span className={colors.text}> {targetSection.title}</span>
                             </h2>
+
+                            {/* --- מנגנון הרשאות לפריט (צ'קבוקסים דינמיים) --- */}
+                            <div className="mb-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                                <label className="block text-sm font-bold text-slate-500 uppercase mb-4">מי יכול לראות את הכרטיסייה הזו?</label>
+                                <div className="flex flex-wrap gap-3">
+                                    <label className={`flex items-center gap-2 px-4 py-2 rounded-xl border cursor-pointer transition-all ${newItemVisibility.includes('הכל') ? 'bg-red-50 border-red-500 text-red-700 font-bold shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                                        <input type="checkbox" className="hidden" checked={newItemVisibility.includes('הכל')} onChange={(e) => { if (e.target.checked) setNewItemVisibility(['הכל']); }} />
+                                        הכל (פתוח לכולם)
+                                    </label>
+                                    
+                                    {Array.from(new Set(phonebookData.map(row => row.department).filter(Boolean))).map((dept: any) => (
+                                        <label key={dept} className={`flex items-center gap-2 px-4 py-2 rounded-xl border cursor-pointer transition-all ${!newItemVisibility.includes('הכל') && newItemVisibility.includes(dept) ? 'bg-amber-50 border-amber-500 text-amber-700 font-bold shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                                            <input type="checkbox" className="hidden" checked={!newItemVisibility.includes('הכל') && newItemVisibility.includes(dept)} onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setNewItemVisibility(prev => prev.filter(v => v !== 'הכל').concat(dept));
+                                                } else {
+                                                    const next = newItemVisibility.filter(v => v !== dept);
+                                                    setNewItemVisibility(next.length === 0 ? ['הכל'] : next);
+                                                }
+                                            }} />
+                                            {dept}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
 
                             <div className="space-y-6 max-h-[60vh] overflow-y-auto px-1">
                                 {/* יצירת אינפוטים דינמיים לפי הסכמה */}

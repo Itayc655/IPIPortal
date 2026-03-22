@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📄 פורטל ארגוני (IPI Portal / PRODUCT-HUB) - מסמך אפיון ותיעוד טכני
 
-## Getting Started
+**גרסה נוכחית:** V3.1.0
+**סביבות עבודה:** Production, Staging (portal-test)
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 1. חזון המערכת (Product Specification - PRD)
+לשמש כדף הבית (Homepage) המרכזי של כל עובדי IPI. המערכת מרכזת את כלל המידע הארגוני, הנהלים, הקישורים למערכות חיצוניות, ופרטי הקשר של העובדים, בתוך ממשק מודרני, מהיר ומותאם אישית.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### מודולי ליבה (Core Features)
+* **מודול קטגוריות וכרטיסיות דינמי (Dynamic Dashboard):**
+  * יצירת קטגוריות צבעוניות נושאיות.
+  * סכמה דינמית לכל קטגוריה: טקסט קצר, ארוך, קישורים, קבצים להורדה וסיסמאות מוצפנות.
+  * הרשאות ברמת כרטיסייה (Item-Level Visibility): הסתרת כרטיסיות ממשתמשים שאינם מורשים (למשל, הצגת כרטיסייה מסוימת ל-IT בלבד).
+* **ספר טלפונים חכם:**
+  * טבלה מתקדמת לניהול אנשי קשר פנים-ארגוניים.
+  * סינון מהיר לפי מחלקות (סנכרון אוטומטי למחלקת המשתמש המחובר).
+  * ייבוא מ-Excel, עריכה ידנית, ומנגנון Drag & Drop לסידור שורות.
+* **מרכז תקשורת (Comms):**
+  * **הודעות מערכת רצות (Banner):** מנגנון התראות בולט עליון.
+  * **חוגגי ימי הולדת:** חלונית צדדית השואבת נתונים ומתעדפת את החוגגים של היום.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### מודל הרשאות (RBAC)
+* **מנהלי מערכת (Admins):** מורשי עריכה מוגדרים מראש. בעלי גישה לטוגל העריכה המוגן.
+* **צופים (Viewers):** גישת קריאה בלבד. כפתורי עריכה/מחיקה מוסתרים לחלוטין.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 2. מפרט טכני (Technical Specification)
 
-To learn more about Next.js, take a look at the following resources:
+### סטאק טכנולוגי (Tech Stack)
+* **צד לקוח (Frontend):** React.js (Next.js App Router) יושב בקובץ `ClientPage.tsx`.
+* **שפת פיתוח:** TypeScript.
+* **עיצוב ו-CSS:** Tailwind CSS (הגדרות ב-`globals.css` ו-`postcss.config.mjs`).
+* **מסד נתונים:** SQLite (`dev.db`).
+* **ספריות מרכזיות:**
+  * `lucide-react`: אייקונים.
+  * `framer-motion`: אנימציות.
+  * `@dnd-kit`: Drag & Drop לגרירת שורות ושדות.
+  * `xlsx`: ייבוא וקריאת נתוני עובדים מקובצי אקסל.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### אדריכלות השרת (API Architecture)
+המערכת עובדת בגישת Micro-services עם תיקיות API נפרדות לכל מודול:
+* **`/api/sections`:** מנהל את הקטגוריות, סכמות השדות, וההרשאות (Visibility).
+* **`/api/phonebook`:** מנהל את רשימת העובדים בספר הטלפונים.
+* **`/api/messages`:** מנהל את ההודעות הרצות (Banner).
+* **`/api/user`:** מנהל את הרשאות המשתמש המחובר.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 3. עץ מבנה הפרויקט (Project Directory Tree)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+המבנה המדויק של תיקיית `PRODUCT-HUB`:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```text
+PRODUCT-HUB/
+├── .next/                  # 🏗️ קבצי מערכת מקומפלים של Next.js (נוצר אוטומטית)
+├── app/                    # 🌐 נתיבי המערכת (App Router)
+│   ├── api/                # ⚙️ צד השרת (Backend API)
+│   │   ├── messages/       
+│   │   ├── phonebook/      
+│   │   │   └── route.ts    # טיפול באנשי קשר
+│   │   ├── sections/       
+│   │   │   └── route.ts    # מוח הליבה לניהול כרטיסיות והרשאות
+│   │   └── user/           
+│   │       └── route.ts    # ניהול יוזרים
+│   ├── generated/          # 🧩 קבצים שנוצרו אוטומטית
+│   ├── ClientPage.tsx      # 👑 קובץ הליבה! מכיל את כל ממשק הלקוח והסטייט (React)
+│   ├── globals.css         # 🎨 סגנונות גלובליים (Tailwind)
+│   ├── layout.tsx          # 🖼️ המעטפת הכללית של האתר (HTML, Body)
+│   └── page.tsx            # 📄 עמוד השרת הראשי שטוען את ה-ClientPage
+│
+├── IPIPortal/              # 📁 תיקיית הפרויקט הקודמת/גיבוי
+├── lib/                    # 🛠️ פונקציות עזר (Helpers) וחיבור למסד הנתונים
+├── portal-test/            # 🧪 סביבת ה-Staging לבדיקות ופיתוח לפני פרודקשן
+├── public/                 # 📂 קבצים פומביים (תמונות, תבנית אקסל)
+│
+├── .env                    # 🔒 משתני סביבה (סודות וסיסמאות)
+├── .gitattributes          # ⚙️ הגדרות Git
+├── .gitignore              # 🙈 רשימת התעלמות ל-Git
+├── dev.db                  # 🗄️ מסד הנתונים המקומי (SQLite)
+├── dynamic_db.json         # 📄 קובץ נתונים גיבוי/דינמי
+├── eslint.config.mjs       # 🧹 הגדרות לינטר (קוד נקי)
+├── next.config.ts          # ⚙️ הגדרות הליבה של Next.js
+├── package.json            # 📦 רשימת הספריות המותקנות (Dependencies)
+├── postcss.config.mjs      # 🎨 הגדרות עיבוד עיצוב
+└── README.md               # 📖 מסמך התיעוד הזה

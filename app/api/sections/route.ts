@@ -101,11 +101,14 @@ const saveData = (sections: any[]) => {
 };
 
 // --- API HANDLERS ---
-
-
-// שליפת הנתונים ממסד הנתונים והצגתם באתר
-export async function GET() {
+// שליפת הנתונים ממסד הנתונים והצגתם באתר - עכשיו עם אבטחת מידע!
+export async function GET(request: Request) {
   try {
+    // 1. קוראים מי המשתמש שמבקש את המידע מתוך הכתובת (URL)
+    const { searchParams } = new URL(request.url);
+    const userDepartment = searchParams.get('department') || '';
+    const isEditMode = searchParams.get('editMode') === 'true';
+
     const pool = await getConnection();
     
     const sectionsResult = await pool.request().query('SELECT * FROM Sections');
@@ -114,18 +117,39 @@ export async function GET() {
     const sections = sectionsResult.recordset;
     const items = itemsResult.recordset;
 
-    const formattedData = sections.map(section => ({
-      id: Number(section.Id),
-      title: section.Title,
-      color: section.Color,
-      schema: JSON.parse(section.SchemaDef || '[]'),
-      items: items
+    const formattedData = sections.map(section => {
+      // 2. הסינון האמיתי קורה כאן בשרת!
+      const securedItems = items
         .filter(item => Number(item.SectionId) === Number(section.Id))
+        .filter(item => {
+          const visibility = item.visibility || 'הכל';
+          
+          // אדמין במצב עריכה? תן לו לראות הכל
+          if (isEditMode) return true;
+          
+          // פתוח לכולם? תן לראות
+          if (visibility === 'הכל') return true;
+          
+          // הרשאה ספציפית למחלקה של המשתמש? תן לראות
+          if (userDepartment && visibility.includes(userDepartment)) return true;
+          
+          // אם הגענו לפה - השרת חוסם את הפריט! הוא לא יישלח לדפדפן בכלל.
+          return false; 
+        })
         .map(item => ({
           id: Number(item.Id),
-          data: JSON.parse(item.Data || '{}')
-        }))
-    }));
+          data: JSON.parse(item.Data || '{}'),
+          visibility: item.visibility || 'הכל'
+        }));
+
+      return {
+        id: Number(section.Id),
+        title: section.Title,
+        color: section.Color,
+        schema: JSON.parse(section.SchemaDef || '[]'),
+        items: securedItems
+      };
+    });
 
     return NextResponse.json(formattedData);
     
@@ -169,7 +193,6 @@ export async function POST(request: Request) {
     } 
     
     else if (body.action === 'update_section') {
-      //... (שאר התנאים פועלים באותה צורה)
       const req = new sql.Request(pool);
       await req
         .input('Id', sql.BigInt, body.id)
@@ -180,21 +203,25 @@ export async function POST(request: Request) {
     
     else if (body.action === 'add_item') {
       console.log('>>> 4. Processing add_item');
+      const visibilityStr = body.visibility || 'הכל'; // <-- שולפים את ההרשאה (או 'הכל' כברירת מחדל)
       const req = new sql.Request(pool);
       await req
         .input('Id', sql.BigInt, generateId())
         .input('SectionId', sql.BigInt, body.sectionId)
         .input('Data', sql.NVarChar, JSON.stringify(body.data || {}))
-        .query('INSERT INTO Items (Id, SectionId, Data) VALUES (@Id, @SectionId, @Data)');
+        .input('visibility', sql.NVarChar, visibilityStr) // <-- מזריקים את ההרשאה
+        .query('INSERT INTO Items (Id, SectionId, Data, visibility) VALUES (@Id, @SectionId, @Data, @visibility)'); // <-- מעדכנים שאילתה
     }
     
     else if (body.action === 'update_item') {
+      const visibilityStr = body.visibility || 'הכל'; // <-- שולפים את ההרשאה החדשה
       const req = new sql.Request(pool);
       await req
         .input('Id', sql.BigInt, body.itemId)
         .input('SectionId', sql.BigInt, body.sectionId)
         .input('Data', sql.NVarChar, JSON.stringify(body.data || {}))
-        .query('UPDATE Items SET Data = @Data WHERE Id = @Id AND SectionId = @SectionId');
+        .input('visibility', sql.NVarChar, visibilityStr) // <-- מזריקים את ההרשאה החדשה
+        .query('UPDATE Items SET Data = @Data, visibility = @visibility WHERE Id = @Id AND SectionId = @SectionId'); // <-- מעדכנים שאילתה
     }
     
     else if (body.action === 'delete_section') {
@@ -227,7 +254,8 @@ export async function POST(request: Request) {
         .filter(item => Number(item.SectionId) === Number(section.Id))
         .map(item => ({
           id: Number(item.Id),
-          data: JSON.parse(item.Data || '{}')
+          data: JSON.parse(item.Data || '{}'),
+          visibility: item.visibility || 'הכל' // <-- מושכים את ההרשאה המעודכנת
         }))
     }));
 
