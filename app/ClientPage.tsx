@@ -177,6 +177,9 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
     const [pendingAction, setPendingAction] = useState<{ type: 'toggle' | 'copy', key: string, value: string } | null>(null);
     const [unlockedPasswords, setUnlockedPasswords] = useState<Record<string, number>>({});
 
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     // ==================== רפרנסים וחיישנים (REFS & SENSORS) ====================
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -190,9 +193,9 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
     // ==================== אפקטים (USE EFFECTS) ====================
 
- // הוספנו את isEditMode ו-initialUser כדי שהמערכת תרענן את המידע כשהם משתנים
-    useEffect(() => { 
-        fetchSections(); 
+    // הוספנו את isEditMode ו-initialUser כדי שהמערכת תרענן את המידע כשהם משתנים
+    useEffect(() => {
+        fetchSections();
     }, [isEditMode, initialUser]);
 
     const fetchSections = async () => {
@@ -203,10 +206,10 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
             // 2. שולחים את הבקשה החכמה לשרת המאובטח שלנו (עם encodeURIComponent למקרה שיש רווחים בשם המחלקה)
             const res = await fetch(`/api/sections?department=${encodeURIComponent(userDept)}&editMode=${editModeParam}`);
-            
+
             if (res.ok) setSections(await res.json());
-        } catch (e) { 
-            console.error("שגיאה במשיכת הנתונים המאובטחים:", e); 
+        } catch (e) {
+            console.error("שגיאה במשיכת הנתונים המאובטחים:", e);
         }
     };
 
@@ -358,10 +361,10 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
         await fetch('/api/sections', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                action, 
-                sectionId: targetSection.id, 
-                itemId: editingItemId, 
+            body: JSON.stringify({
+                action,
+                sectionId: targetSection.id,
+                itemId: editingItemId,
                 data: dataToSend,
                 visibility: visibilityString // 2. שולחים את ההרשאות ל-SQL!
             })
@@ -378,14 +381,14 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
         setTargetSection(section);
         setNewItemData({ ...item.data });
         setEditingItemId(item.id);
-        
+
         // 3. כשפותחים פריט לעריכה - קוראים את ההרשאות שלו
         if (item.visibility && item.visibility !== 'הכל' && item.visibility.trim() !== '') {
             setNewItemVisibility(item.visibility.split(',').map((s: string) => s.trim()));
         } else {
             setNewItemVisibility(['הכל']);
         }
-        
+
         setShowAddItemModal(true);
     };
 
@@ -548,12 +551,46 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
 
     // ==================== פונקציות: אבטחה והתחברות ====================
-    const handleLogin = () => {
-        if (loginCredentials.username === 'admin' && loginCredentials.password === '123456') {
-            setIsEditMode(true); setShowLoginModal(false); setLoginCredentials({ username: '', password: '' });
-        } else alert('שגיאה');
-    };
+    // ==================== פונקציות: אבטחה והתחברות (מעודכן ל-DB) ====================
+    const handleLogin = async (e?: React.FormEvent) => {
+        if (e && e.preventDefault) e.preventDefault();
 
+        setIsLoading(true);
+        setError('');
+
+        try {
+            // שולחים את השם והסיסמה שהמשתמש הקליד בתיבות הקיימות ל-API החדש
+            const response = await fetch('/api/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: loginCredentials.username,
+                    password: loginCredentials.password
+                }),
+            });
+
+            const data = await response.json();
+
+            // בודקים את התשובה מה-DB (שעכשיו חוזרת עם סטטוס 200)
+            if (data.isAuthorized === true) {
+                // הצלחה!
+                setIsAuthenticated(true);
+                setIsEditMode(true);
+                setShowLoginModal(false);
+                setLoginCredentials({ username: '', password: '' });
+            } else {
+                // נכשל - מציגים את השגיאה מה-DB (למשל "סיסמה שגויה")
+                const errorMsg = data.message || 'פרטי התחברות שגויים.';
+                setError(errorMsg);
+                alert(errorMsg);
+            }
+        } catch (err) {
+            setError('שגיאת תקשורת מול השרת.');
+            alert('שגיאת תקשורת מול השרת.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
     const copyToClipboard = (text: string, id: string) => {
         navigator.clipboard.writeText(text);
         setCopiedField(id);
@@ -863,19 +900,19 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                     {sections.map(section => {
                         const colors = getColorClasses(section.color);
 
-                     // סינון פריטים בקטגוריה (גם לפי חיפוש וגם לפי הרשאות!)
+                        // סינון פריטים בקטגוריה (גם לפי חיפוש וגם לפי הרשאות!)
                         const visibleItems = section.items.filter((item: any) => {
-                            
+
                             // 1. סינון לפי הרשאות צפייה של הכרטיסייה
                             const visibilityStr = item.visibility || 'הכל';
                             if (!isEditMode && visibilityStr !== 'הכל') {
                                 const userDept = initialUser?.department?.toLowerCase() || "";
                                 const userName = initialUser?.username?.toLowerCase() || "";
                                 const allowedUsersOrDepts = visibilityStr.toLowerCase().split(',').map((s: string) => s.trim());
-                                
+
                                 // אם המחלקה או השם שלו לא ברשימה - הוא לא יראה את הכרטיסייה
                                 if (!allowedUsersOrDepts.includes(userDept) && !allowedUsersOrDepts.includes(userName)) {
-                                    return false; 
+                                    return false;
                                 }
                             }
 
@@ -1331,7 +1368,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                         <input type="checkbox" className="hidden" checked={newItemVisibility.includes('הכל')} onChange={(e) => { if (e.target.checked) setNewItemVisibility(['הכל']); }} />
                                         הכל (פתוח לכולם)
                                     </label>
-                                    
+
                                     {Array.from(new Set(phonebookData.map(row => row.department).filter(Boolean))).map((dept: any) => (
                                         <label key={dept} className={`flex items-center gap-2 px-4 py-2 rounded-xl border cursor-pointer transition-all ${!newItemVisibility.includes('הכל') && newItemVisibility.includes(dept) ? 'bg-amber-50 border-amber-500 text-amber-700 font-bold shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                                             <input type="checkbox" className="hidden" checked={!newItemVisibility.includes('הכל') && newItemVisibility.includes(dept)} onChange={(e) => {
