@@ -1,12 +1,12 @@
 import sql from 'mssql';
 
 const sqlConfig = {
-  user: 'sa', 
-  password: '123456', // הכנס כאן את סיסמת ה-SQL שלך
-  database: 'ProductHub',
-  server: 'localhost',
+  user: process.env.DB_USER || 'sa', 
+  password: process.env.DB_PASSWORD || '123456', 
+  database: process.env.DB_NAME || 'ProductHub_TEST',
+  server: process.env.DB_SERVER || 'localhost',
   options: {
-    instanceName: 'SQLEXPRESS',
+    instanceName: process.env.DB_INSTANCE || 'SQLEXPRESS',
     encrypt: false, 
     trustServerCertificate: true 
   }
