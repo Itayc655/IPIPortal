@@ -466,6 +466,9 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
         setPhonebookData(newData);
         await fetch('/api/phonebook', {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json' // <--- שורת הקסם שחסרה!
+            },
             body: JSON.stringify({ type: 'data', payload: newData })
         });
     };
@@ -474,6 +477,9 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
         setPhonebookSchema(newSchema);
         await fetch('/api/phonebook', {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json' // <--- וגם כאן!
+            },
             body: JSON.stringify({ type: 'schema', payload: newSchema })
         });
     };
@@ -482,21 +488,31 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
     const removeColumn = (keyToRemove: string) => savePhonebookSchema(phonebookSchema.filter(col => col.key !== keyToRemove));
     const updateColumnTitle = (key: string, newTitle: string) => savePhonebookSchema(phonebookSchema.map(col => col.key === key ? { ...col, label: newTitle } : col));
 
-    const addPhonebookRow = () => {
-        const newRow: any = { id: Date.now() };
-        phonebookSchema.forEach(col => newRow[col.key] = "");
-        savePhonebookData([...phonebookData, newRow]);
+   const addPhonebookRow = () => {
+        const newRow: any = { id: Date.now().toString() };
+        phonebookSchema.forEach((col: any) => newRow[col.key] = "");
+        
+        // מעדכנים *רק* את הטיוטה. המסך יתעדכן מיד!
+        setDraftPhonebook(prevDraft => [...prevDraft, newRow]);
     };
 
-    const deletePhonebookRow = (id: number) => savePhonebookData(phonebookData.filter(row => row.id !== id));
+    const deletePhonebookRow = (id: number | string) => {
+        const idAsString = String(id);
+        
+        // מוחקים *רק* מהטיוטה. השורה תעלם מהמסך בשנייה.
+        setDraftPhonebook(prevDraft => prevDraft.filter(row => String(row.id) !== idAsString));
+    };
 
-    const updatePhonebookCell = (id: number, field: string, value: string) => {
+    const updatePhonebookCell = (id: number | string, field: string, value: string) => {
+        const idAsString = String(id);
+        
+        // מעדכנים *רק* את הטיוטה.
         setDraftPhonebook(prevDraft => prevDraft.map(row =>
-            row.id === id ? { ...row, [field]: value } : row
+            String(row.id) === idAsString ? { ...row, [field]: value } : row
         ));
     };
 
-    const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -530,6 +546,10 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                 if (!confirm(`נמצאו ${validRows.length} עובדים תקינים. האם להחליף את ספר הטלפונים? (סוננו ${rawRows.length - validRows.length} שורות פגומות)`)) {
                     e.target.value = ''; return;
                 }
+                
+                // --- הנה שורת הקסם שחסרה! ---
+                setDraftPhonebook(validRows); // הזרקה של נתוני האקסל ישר לטיוטה כדי שהמסך יתעדכן מיד!
+                
                 savePhonebookData(validRows);
                 alert("הנתונים עודכנו בהצלחה!");
             } catch (error) { console.error("Excel Error:", error); alert("חלה שגיאה בעיבוד הקובץ."); }
@@ -537,7 +557,6 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
         reader.readAsArrayBuffer(file);
         e.target.value = '';
     };
-
     const downloadExcelTemplate = () => {
         const headers = [{
             'שם העובד': 'ישראל ישראלי', 'מחלקה': 'מכירות', 'תפקיד': 'מנהל',

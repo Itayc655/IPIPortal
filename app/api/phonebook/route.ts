@@ -24,25 +24,19 @@ export async function POST(request: Request) {
         const body = await request.json();
         const pool = await getConnection();
         const req = new sql.Request(pool);
-        const payload = body.payload;
         
-        // בתוך ה-API שמקבל את payload
-        const validData = payload.filter((row: any) =>
-            row.name && row.name.trim().length >= 2
-        );
-        // שמור רק את validData ל-SQL...
-
-
         if (body.type === 'schema') {
-            await req.input('val', sql.NVarChar, JSON.stringify(body.payload))
+            await req.input('val', sql.NVarChar(sql.MAX), JSON.stringify(body.payload))
                 .query('UPDATE PhonebookConfig SET SchemaDef = @val WHERE Id = 1');
         } else {
-            await req.input('val', sql.NVarChar, JSON.stringify(body.payload))
+            // שומרים בדיוק את מה שהפרונטאנד שלח, בלי לסנן ולשבש את העמודות הדינמיות
+            await req.input('val', sql.NVarChar(sql.MAX), JSON.stringify(body.payload))
                 .query('UPDATE PhonebookData SET Content = @val WHERE Id = 1');
         }
 
         return NextResponse.json({ success: true });
     } catch (error) {
+        console.error("❌ Save Error:", error);
         return NextResponse.json({ error: 'Failed to save' }, { status: 500 });
     }
 }
