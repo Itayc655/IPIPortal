@@ -488,31 +488,31 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
     const removeColumn = (keyToRemove: string) => savePhonebookSchema(phonebookSchema.filter(col => col.key !== keyToRemove));
     const updateColumnTitle = (key: string, newTitle: string) => savePhonebookSchema(phonebookSchema.map(col => col.key === key ? { ...col, label: newTitle } : col));
 
-   const addPhonebookRow = () => {
+    const addPhonebookRow = () => {
         const newRow: any = { id: Date.now().toString() };
         phonebookSchema.forEach((col: any) => newRow[col.key] = "");
-        
+
         // מעדכנים *רק* את הטיוטה. המסך יתעדכן מיד!
         setDraftPhonebook(prevDraft => [...prevDraft, newRow]);
     };
 
     const deletePhonebookRow = (id: number | string) => {
         const idAsString = String(id);
-        
+
         // מוחקים *רק* מהטיוטה. השורה תעלם מהמסך בשנייה.
         setDraftPhonebook(prevDraft => prevDraft.filter(row => String(row.id) !== idAsString));
     };
 
     const updatePhonebookCell = (id: number | string, field: string, value: string) => {
         const idAsString = String(id);
-        
+
         // מעדכנים *רק* את הטיוטה.
         setDraftPhonebook(prevDraft => prevDraft.map(row =>
             String(row.id) === idAsString ? { ...row, [field]: value } : row
         ));
     };
 
-   const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -546,10 +546,10 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                 if (!confirm(`נמצאו ${validRows.length} עובדים תקינים. האם להחליף את ספר הטלפונים? (סוננו ${rawRows.length - validRows.length} שורות פגומות)`)) {
                     e.target.value = ''; return;
                 }
-                
+
                 // --- הנה שורת הקסם שחסרה! ---
                 setDraftPhonebook(validRows); // הזרקה של נתוני האקסל ישר לטיוטה כדי שהמסך יתעדכן מיד!
-                
+
                 savePhonebookData(validRows);
                 alert("הנתונים עודכנו בהצלחה!");
             } catch (error) { console.error("Excel Error:", error); alert("חלה שגיאה בעיבוד הקובץ."); }
@@ -1075,15 +1075,14 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
 
                 {/* --- אזור 4: ספר טלפונים קבוע בפינה השמאלית תחתונה --- */}
-                <div className="mt-12 2xl:mt-20 lg:pl-[270px] xl:pl-[290px] 2xl:pl-[320px]">
-                    <div className="flex justify-between items-end mb-8 w-full">
-                        <div>
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="h-8 w-1.5 bg-amber-500 rounded-full"></div>
-                                <h2 className="text-3xl font-black text-slate-800 tracking-tight">ספר טלפונים </h2>
-                            </div>
-                            <p className="text-slate-500 font-medium mr-4">ניהול רשימת קשר ומידע מחלקתי</p>
+                <div className="mt-4 md:mt-12 2xl:mt-20 w-full px-4 md:px-8">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8 w-full">                        <div>
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="h-8 w-1.5 bg-amber-500 rounded-full"></div>
+                            <h2 className="text-3xl font-black text-slate-800 tracking-tight">ספר טלפונים </h2>
                         </div>
+                        <p className="text-slate-500 font-medium mr-4">ניהול רשימת קשר ומידע מחלקתי</p>
+                    </div>
 
                         {/* כפתור עריכת/שמירת ספר טלפונים */}
                         <div className="flex gap-4 items-center">
@@ -1115,15 +1114,14 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
                         {/* כפתורי הוספה ואקסל (מוצג במצב עריכת טבלה) */}
                         {isPhonebookEditMode && (
-                            <div className="p-8 border-t border-amber-50 flex justify-center gap-4 bg-amber-50/30 flex-wrap">
-                                <button onClick={addPhonebookRow} className="flex items-center gap-3 cursor-pointer text-white font-black bg-slate-900 px-8 py-4 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-xl">
-                                    <Plus size={20} /> הוסף ידנית
-                                </button>
-                                <label className="flex items-center gap-3 cursor-pointer text-slate-900 font-black bg-amber-400 px-8 py-4 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-xl">
+                            <div className="w-full md:w-auto p-4 md:p-8 border-t border-amber-50 flex flex-col md:flex-row justify-center gap-3 md:gap-4 bg-amber-50/30">                                <button onClick={addPhonebookRow} className="flex items-center gap-3 cursor-pointer text-white font-black bg-slate-900 px-8 py-4 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-xl">
+                                <Plus size={20} /> הוסף ידנית
+                            </button>
+                                <label className="w-full md:w-auto flex items-center gap-3 cursor-pointer text-slate-900 font-black bg-amber-400 px-8 py-4 rounded-[2rem] hover:bg-amber-500 hover:scale-105 transition-all shadow-xl">
                                     <Upload size={20} /> ייבא מאקסל
                                     <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleExcelUpload} />
                                 </label>
-                                <button onClick={downloadExcelTemplate} className="flex items-center gap-3 cursor-pointer text-amber-800 font-black bg-amber-100 border-2 border-amber-200 px-8 py-4 rounded-[2rem] hover:bg-amber-200 hover:scale-105 transition-all shadow-sm">
+                                <button onClick={downloadExcelTemplate} className="w-full md:w-auto flex items-center gap-3 cursor-pointer text-amber-800 font-black bg-amber-100 border-2 border-amber-200 px-8 py-4 rounded-[2rem] hover:bg-amber-200 hover:scale-105 transition-all shadow-sm">
                                     <Download size={20} /> הורד תבנית
                                 </button>
                             </div>
@@ -1152,9 +1150,8 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                             <div className="w-full px-2 2xl:px-6">
                                 <div
                                     ref={scrollContainerRef}
-                                    className="max-h-[50vh] 2xl:max-h-[60vh] overflow-y-auto overflow-x-hidden rounded-[2rem] pb-2 pt-0 px-2 pr-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-amber-300 transition-colors duration-300"
-                                >
-                                    <table className="w-full table-fixed text-right border-separate border-spacing-y-2 2xl:border-spacing-y-3 relative">
+                                    className="max-h-[50vh] 2xl:max-h-[60vh] overflow-y-auto overflow-x-auto rounded-[2rem] pb-2 pt-0 px-2 pr-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-amber-300 transition-colors duration-300"                                >
+                                    <table className="w-full min-w-[900px] lg:min-w-full table-fixed text-right border-separate border-spacing-y-2 2xl:border-spacing-y-3 relative">
                                         <thead className="sticky top-0 z-50">
                                             <tr className="text-amber-700 relative z-50">
                                                 {isPhonebookEditMode && <th className="w-8 rounded-r-2xl bg-white shadow-[0_-15px_0_0_white,0_4px_6px_-1px_rgba(0,0,0,0.05)]"></th>}
