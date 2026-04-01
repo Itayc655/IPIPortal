@@ -101,12 +101,14 @@ const saveData = (sections: any[]) => {
 };
 
 // --- API HANDLERS ---
-// שליפת הנתונים ממסד הנתונים והצגתם באתר - עכשיו עם אבטחת מידע!
+// שליפת הנתונים ממסד הנתונים והצגתם באתר - עכשיו עם אבטחת מידע מלאה (מחלקה, שם משתמש, טייטל)!
 export async function GET(request: Request) {
   try {
     // 1. קוראים מי המשתמש שמבקש את המידע מתוך הכתובת (URL)
     const { searchParams } = new URL(request.url);
-    const userDepartment = searchParams.get('department') || '';
+    const userDepartment = (searchParams.get('department') || '').toLowerCase();
+    const userName = (searchParams.get('username') || '').toLowerCase(); // התוספת שלנו
+    const userTitle = (searchParams.get('title') || '').toLowerCase();       // התוספת שלנו
     const isEditMode = searchParams.get('editMode') === 'true';
 
     const pool = await getConnection();
@@ -122,16 +124,21 @@ export async function GET(request: Request) {
       const securedItems = items
         .filter(item => Number(item.SectionId) === Number(section.Id))
         .filter(item => {
-          const visibility = item.visibility || 'הכל';
+          const visibilityStr = item.visibility || 'הכל';
           
           // אדמין במצב עריכה? תן לו לראות הכל
           if (isEditMode) return true;
           
           // פתוח לכולם? תן לראות
-          if (visibility === 'הכל') return true;
+          if (visibilityStr === 'הכל') return true;
           
-          // הרשאה ספציפית למחלקה של המשתמש? תן לראות
-          if (userDepartment && visibility.includes(userDepartment)) return true;
+          // חותכים את המחרוזת מה-DB למערך נקי ומדויק
+          const allowedList = visibilityStr.toLowerCase().split(',').map((s: string) => s.trim());
+          
+          // הרשאה ספציפית למחלקה, לשם המשתמש או לטייטל? תן לראות
+          if (userDepartment && allowedList.includes(userDepartment)) return true;
+          if (userName && allowedList.includes(userName)) return true;
+          if (userTitle && allowedList.includes(userTitle)) return true;
           
           // אם הגענו לפה - השרת חוסם את הפריט! הוא לא יישלח לדפדפן בכלל.
           return false; 
