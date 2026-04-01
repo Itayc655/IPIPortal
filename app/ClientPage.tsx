@@ -200,19 +200,28 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
     const fetchSections = async () => {
         try {
-            // 1. אוספים את "תעודת הזהות" של המשתמש המחובר
+            // 1. אוספים את "תעודת הזהות" המלאה של המשתמש המחובר
             const userDept = initialUser?.department || '';
+            const userName = initialUser?.username || '';   // התוספת שלנו
+            const userTitle = initialUser?.title || '';     // התוספת שלנו
             const editModeParam = isEditMode ? 'true' : 'false';
 
-            // 2. שולחים את הבקשה החכמה לשרת המאובטח שלנו (עם encodeURIComponent למקרה שיש רווחים בשם המחלקה)
-            const res = await fetch(`/api/sections?department=${encodeURIComponent(userDept)}&editMode=${editModeParam}`);
+            // 2. בונים את הכתובת עם כל הפרמטרים (משתמשים ב-URLSearchParams כדי למנוע בעיות עם רווחים בעברית)
+            const urlParams = new URLSearchParams({
+                department: userDept,
+                username: userName,
+                title: userTitle,
+                editMode: editModeParam
+            });
+
+            // 3. שולחים את הבקשה החכמה לשרת המאובטח שלנו (GET)
+            const res = await fetch(`/api/sections?${urlParams.toString()}`);
 
             if (res.ok) setSections(await res.json());
         } catch (e) {
             console.error("שגיאה במשיכת הנתונים המאובטחים:", e);
         }
     };
-
     // טעינה ראשונית: הודעות מערכת
     useEffect(() => {
         const loadMessages = async () => {
@@ -918,7 +927,6 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                     {/* לולאה שעוברת על כל הקטגוריות במערכת */}
                     {sections.map(section => {
                         const colors = getColorClasses(section.color);
-
                         // סינון פריטים בקטגוריה (גם לפי חיפוש וגם לפי הרשאות!)
                         const visibleItems = section.items.filter((item: any) => {
 
@@ -927,10 +935,14 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                             if (!isEditMode && visibilityStr !== 'הכל') {
                                 const userDept = initialUser?.department?.toLowerCase() || "";
                                 const userName = initialUser?.username?.toLowerCase() || "";
+                                const userTitle = initialUser?.title?.toLowerCase() || ""; // התוספת החדשה: שולפים את הטייטל
+
                                 const allowedUsersOrDepts = visibilityStr.toLowerCase().split(',').map((s: string) => s.trim());
 
-                                // אם המחלקה או השם שלו לא ברשימה - הוא לא יראה את הכרטיסייה
-                                if (!allowedUsersOrDepts.includes(userDept) && !allowedUsersOrDepts.includes(userName)) {
+                                // אם המחלקה, השם, או הטייטל שלו לא ברשימה - הוא לא יראה את הכרטיסייה
+                                if (!allowedUsersOrDepts.includes(userDept) &&
+                                    !allowedUsersOrDepts.includes(userName) &&
+                                    !allowedUsersOrDepts.includes(userTitle)) { // התוספת החדשה: בודקים גם את הטייטל
                                     return false;
                                 }
                             }
@@ -1370,37 +1382,135 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                 const colors = getColorClasses(targetSection.color);
                 return (
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { setShowAddItemModal(false); setEditingItemId(null); setNewItemData({}); }}>
-                        <div className="bg-white rounded-[2.5rem] w-full max-w-xl shadow-2xl p-10 relative" onClick={(e) => e.stopPropagation()}>
-                            <button onClick={() => { setShowAddItemModal(false); setEditingItemId(null); setNewItemData({}); }} className="absolute top-8 left-8 cursor-pointer text-slate-400 hover:text-slate-600"><X size={28} /></button>
+                        <div className="bg-white rounded-[2.5rem] w-full max-w-xl shadow-2xl p-10 relative max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={(e) => e.stopPropagation()}>                            <button onClick={() => { setShowAddItemModal(false); setEditingItemId(null); setNewItemData({}); }} className="absolute top-8 left-8 cursor-pointer text-slate-400 hover:text-slate-600"><X size={28} /></button>
                             <h2 className="text-3xl font-black mb-8 pr-4">
                                 {editingItemId ? 'עריכת פריט ב' : 'הוסף פריט ל'}<span className={colors.text}> {targetSection.title}</span>
                             </h2>
 
-                            {/* --- מנגנון הרשאות לפריט (צ'קבוקסים דינמיים) --- */}
+                            {/* --- מנגנון הרשאות לפריט (צ'קבוקסים דינמיים + יוזרים וטייטלים) --- */}
                             <div className="mb-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
                                 <label className="block text-sm font-bold text-slate-500 uppercase mb-4">מי יכול לראות את הכרטיסייה הזו?</label>
                                 <div className="flex flex-wrap gap-3">
-                                    <label className={`flex items-center gap-2 px-4 py-2 rounded-xl border cursor-pointer transition-all ${newItemVisibility.includes('הכל') ? 'bg-red-50 border-red-500 text-red-700 font-bold shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                                        <input type="checkbox" className="hidden" checked={newItemVisibility.includes('הכל')} onChange={(e) => { if (e.target.checked) setNewItemVisibility(['הכל']); }} />
+                                    <label className={`flex items-center gap-2 px-4 py-2 rounded-xl border cursor-pointer transition-all ${newItemVisibility.includes('הכל') || newItemVisibility.length === 0 ? 'bg-red-50 border-red-500 text-red-700 font-bold shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                                        <input type="checkbox" className="hidden"
+                                            checked={newItemVisibility.includes('הכל') || newItemVisibility.length === 0}
+                                            onChange={(e) => {
+                                                if (e.target.checked) setNewItemVisibility(['הכל']);
+                                            }}
+                                        />
                                         הכל (פתוח לכולם)
                                     </label>
 
-                                    {Array.from(new Set(phonebookData.map(row => row.department).filter(Boolean))).map((dept: any) => (
+                                    {Array.from(new Set(phonebookData.map((row: any) => row.department).filter(Boolean))).map((dept: any) => (
                                         <label key={dept} className={`flex items-center gap-2 px-4 py-2 rounded-xl border cursor-pointer transition-all ${!newItemVisibility.includes('הכל') && newItemVisibility.includes(dept) ? 'bg-amber-50 border-amber-500 text-amber-700 font-bold shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                                            <input type="checkbox" className="hidden" checked={!newItemVisibility.includes('הכל') && newItemVisibility.includes(dept)} onChange={(e) => {
-                                                if (e.target.checked) {
-                                                    setNewItemVisibility(prev => prev.filter(v => v !== 'הכל').concat(dept));
-                                                } else {
-                                                    const next = newItemVisibility.filter(v => v !== dept);
-                                                    setNewItemVisibility(next.length === 0 ? ['הכל'] : next);
-                                                }
-                                            }} />
+                                            <input type="checkbox" className="hidden"
+                                                checked={!newItemVisibility.includes('הכל') && newItemVisibility.includes(dept)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setNewItemVisibility((prev: any) => prev.filter((v: any) => v !== 'הכל').concat(dept));
+                                                    } else {
+                                                        const next = newItemVisibility.filter((v: any) => v !== dept);
+                                                        setNewItemVisibility(next.length === 0 ? ['הכל'] : next);
+                                                    }
+                                                }}
+                                            />
                                             {dept}
                                         </label>
                                     ))}
                                 </div>
-                            </div>
 
+                                {/* התוספת החדשה: חציצת תגיות (Tags) למשתמשים וטייטלים */}
+                                <div className="mt-5 pt-5 border-t border-slate-200">
+                                    <label className="block text-sm font-bold text-slate-600 mb-2">
+                                        מורשים נוספים (לפי שם משתמש או טייטל)
+                                    </label>
+
+                                    {(() => {
+                                        const allDepts = Array.from(new Set(phonebookData.map((row: any) => row.department).filter(Boolean)));
+                                        const customTags = newItemVisibility.filter((v: any) => v !== 'הכל' && !allDepts.includes(v));
+
+                                        return (
+                                            <div className="space-y-3">
+                                                {/* שדה הזנה וכפתור - הוספה חופשית ללא שאילתות לשרת */}
+                                                <div className="flex gap-2 relative">
+                                                    <input
+                                                        type="text"
+                                                        id="customTagInput"
+                                                        className="flex-1 border border-slate-200 rounded-xl p-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 text-base bg-white transition-all disabled:bg-slate-50"
+                                                        placeholder="הקלד שם או טייטל ולחץ Enter..."
+                                                        onKeyDown={async (e) => {
+                                                            if (e.key === 'Enter' || e.key === 'NumpadEnter' || e.key === ',') {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+
+                                                                const inputElement = e.currentTarget;
+                                                                const val = inputElement.value.trim();
+
+                                                                if (val && !newItemVisibility.includes(val)) {
+                                                                    inputElement.disabled = true; // נועלים כדי למנוע לחיצות כפולות
+
+                                                                    try {
+                                                                        // פנייה לנתיב החדש שיצרנו
+                                                                        const res = await fetch(`/api/user?search=${encodeURIComponent(val)}`);
+                                                                        const result = await res.json();
+
+                                                                        if (result.exists) {
+                                                                            // המשתמש/טייטל אומת מול ה-AD!
+                                                                            setNewItemVisibility((prev: any) => [...prev.filter((v: any) => v !== 'הכל'), val]);
+                                                                            inputElement.value = '';
+                                                                        } else {
+                                                                            alert(`לא נמצא משתמש או הרשאה בשם "${val}" ב-AD הארגוני.`);
+                                                                        }
+                                                                    } catch (err) {
+                                                                        alert("שגיאת תקשורת מול השרת בבדיקת ההרשאה.");
+                                                                    } finally {
+                                                                        inputElement.disabled = false;
+                                                                        inputElement.focus();
+                                                                    }
+                                                                }
+                                                            }
+                                                        }}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={async (e) => {
+                                                            e.preventDefault();
+                                                            const inputElement = document.getElementById('customTagInput') as HTMLInputElement;
+                                                            if (!inputElement) return;
+
+                                                            const val = inputElement.value.trim();
+                                                            if (val && !newItemVisibility.includes(val)) {
+                                                                inputElement.disabled = true;
+
+                                                                try {
+                                                                    const res = await fetch(`/api/user?search=${encodeURIComponent(val)}`);
+                                                                    const result = await res.json();
+
+                                                                    if (result.exists) {
+                                                                        setNewItemVisibility((prev: any) => [...prev.filter((v: any) => v !== 'הכל'), val]);
+                                                                        inputElement.value = '';
+                                                                    } else {
+                                                                        alert(`הערך "${val}" לא קיים ב-AD.`);
+                                                                    }
+                                                                } catch (err) {
+                                                                    alert("שגיאת תקשורת.");
+                                                                } finally {
+                                                                    inputElement.disabled = false;
+                                                                    inputElement.focus();
+                                                                }
+                                                            }
+                                                        }}
+                                                        className="bg-blue-50 text-blue-600 font-bold px-6 rounded-xl hover:bg-blue-100 transition-colors border border-blue-200 cursor-pointer"
+                                                    >
+                                                        הוסף
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                    <p className="text-xs text-slate-400 mt-2 font-medium">הקלד שם ולחץ Enter. ברגע שתוסיף מורשים, הכרטיסייה תינעל רק אליהם.</p>
+                                </div>
+                            </div>
                             <div className="space-y-6 max-h-[60vh] overflow-y-auto px-1">
                                 {/* יצירת אינפוטים דינמיים לפי הסכמה */}
                                 {targetSection.schema.map((field: any, idx: number) => (
