@@ -101,15 +101,30 @@ const saveData = (sections: any[]) => {
 };
 
 // --- API HANDLERS ---
-// שליפת הנתונים ממסד הנתונים והצגתם באתר - עכשיו עם אבטחת מידע מלאה (מחלקה, שם משתמש, טייטל)!
+// שליפת הנתונים ממסד הנתונים והצגתם באתר - עכשיו עם אבטחת מידע מלאה (מחלקה, שם משתמש, טייטל, וקבוצות AD)!
 export async function GET(request: Request) {
   try {
     // 1. קוראים מי המשתמש שמבקש את המידע מתוך הכתובת (URL)
     const { searchParams } = new URL(request.url);
     const userDepartment = (searchParams.get('department') || '').toLowerCase();
-    const userName = (searchParams.get('username') || '').toLowerCase(); // התוספת שלנו
-    const userTitle = (searchParams.get('title') || '').toLowerCase();       // התוספת שלנו
+    const userName = (searchParams.get('username') || '').toLowerCase(); 
+    const userTitle = (searchParams.get('title') || '').toLowerCase();       
     const isEditMode = searchParams.get('editMode') === 'true';
+
+    // התוספת החדשה: קריאת קבוצות ה-AD מתוך ה-URL
+    let userGroups: string[] = [];
+    const groupsParam = searchParams.get('groups');
+    if (groupsParam) {
+        try {
+            // ממירים את הטקסט חזרה למערך, והופכים הכל לאותיות קטנות כדי שההשוואה תעבוד תמיד
+            const parsedGroups = JSON.parse(groupsParam);
+            if (Array.isArray(parsedGroups)) {
+                userGroups = parsedGroups.map(g => String(g).toLowerCase().trim());
+            }
+        } catch (e) {
+            console.error('Failed to parse groups from URL', e);
+        }
+    }
 
     const pool = await getConnection();
     
@@ -140,6 +155,10 @@ export async function GET(request: Request) {
           if (userName && allowedList.includes(userName)) return true;
           if (userTitle && allowedList.includes(userTitle)) return true;
           
+          // התוספת החדשה: בדיקת קבוצות AD (האם לפחות קבוצה אחת של המשתמש נמצאת ברשימת המורשים)
+          const hasGroupAccess = userGroups.some(group => allowedList.includes(group));
+          if (hasGroupAccess) return true;
+          
           // אם הגענו לפה - השרת חוסם את הפריט! הוא לא יישלח לדפדפן בכלל.
           return false; 
         })
@@ -165,7 +184,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
   }
 }
-
 // שמירת הנתונים החדשים מהאתר לתוך מסד הנתונים
 export async function POST(request: Request) {
   console.log('>>> 1. POST Request Started');

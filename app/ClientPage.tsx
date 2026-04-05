@@ -202,15 +202,20 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
         try {
             // 1. אוספים את "תעודת הזהות" המלאה של המשתמש המחובר
             const userDept = initialUser?.department || '';
-            const userName = initialUser?.username || '';   // התוספת שלנו
-            const userTitle = initialUser?.title || '';     // התוספת שלנו
+            const userName = initialUser?.username || '';
+            const userTitle = initialUser?.title || '';
+
+            // התוספת שלנו: אורזים את הקבוצות כטקסט כדי שיעברו ב-URL
+            const userGroups = initialUser?.groups ? JSON.stringify(initialUser.groups) : '[]';
+
             const editModeParam = isEditMode ? 'true' : 'false';
 
-            // 2. בונים את הכתובת עם כל הפרמטרים (משתמשים ב-URLSearchParams כדי למנוע בעיות עם רווחים בעברית)
+            // 2. בונים את הכתובת עם כל הפרמטרים
             const urlParams = new URLSearchParams({
                 department: userDept,
                 username: userName,
                 title: userTitle,
+                groups: userGroups, // <--- הוספנו את הקבוצות לכאן!
                 editMode: editModeParam
             });
 
@@ -222,6 +227,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
             console.error("שגיאה במשיכת הנתונים המאובטחים:", e);
         }
     };
+    
     // טעינה ראשונית: הודעות מערכת
     useEffect(() => {
         const loadMessages = async () => {

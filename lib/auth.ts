@@ -46,47 +46,38 @@ export async function getCurrentUser() {
   const headersList = await headers();
   const authHeader = headersList.get('authorization');
   
-  // תופסים את ה-IP הגולמי
+  // תופסים את ה-IP הגולמי וחותכים פורט
   let rawIp = headersList.get('x-forwarded-for') || headersList.get('remote-addr') || 'unknown';
-  
-  // חותכים את הפורט המשתנה
   const clientIp = rawIp.split(',')[0].split(':')[0].trim();
 
   let username = '';
 
-  // 1. קריאת הזיהוי הראשונית מהדפדפן
   if (authHeader && authHeader.startsWith('NTLM ')) {
     username = decodeNTLM(authHeader);
-    if (username) {
-      ipToUserCache.set(clientIp, username); 
-    }
+    if (username) ipToUserCache.set(clientIp, username); 
   }
 
-  // 2. קסם הרענון: שליפה לפי IP נקי
   if (!username && clientIp !== 'unknown') {
     username = ipToUserCache.get(clientIp) || '';
   }
 
-  // אם אחרי הכל לא מצאנו כלום, זה אורח
   if (!username) {
     return { username: 'אורח', displayName: 'אורח', department: 'כללי', title: '', groups: [] };
   }
 
-  // בדיקת זיכרון מטמון מול ה-AD
   const now = Date.now();
   if (userCache.has(username)) {
     const cached = userCache.get(username)!;
     if (now - cached.timestamp < CACHE_TTL) return cached.data;
   }
 
-  // רשימת שרתי ה-AD
   const adServers = ['192.168.1.243', '192.168.1.244']; 
   let adData: any = null;
 
   for (const server of adServers) {
     try {
-      // === התיקון הגדול: מושכים גם טייטל וגם מריצים פקודה שמביאה את רשימת הקבוצות הנקייה ===
-      const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "chcp 65001 >$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $u = Get-ADUser -Identity '${username}' -Server '${server}' -Properties Name,Department,Title; $g = Get-ADPrincipalGroupMembership -Identity '${username}' -Server '${server}' | Select-Object -ExpandProperty Name; [PSCustomObject]@{ Name=$u.Name; Department=$u.Department; Title=$u.Title; Groups=@($g) } | ConvertTo-Json"`;
+      // === התיקון הקריטי: מושכים את MemberOf בשאילתה אחת פשוטה ויציבה ===
+      const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "chcp 65001 >$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ADUser -Identity '${username}' -Server '${server}' -Properties Name,Department,Title,MemberOf | Select-Object Name,Department,Title,MemberOf | ConvertTo-Json"`;
 
       const { stdout } = await execPromise(psCommand, { 
           encoding: 'utf8', 
@@ -103,21 +94,35 @@ export async function getCurrentUser() {
     }
   }
 
- // מושכים את שם המחשב על בסיס ה-IP
   const computerName = await getComputerName(clientIp);
 
   if (!adData) {
-      console.error("❌ תקלה קריטית: אף שרת AD לא זמין!");
       return { username, displayName: username, department: 'כללי', title: '', groups: [], ipAddress: clientIp, computerName };
   }
 
   try {
+    // === קסם הניקוי ב-JS: לוקחים את ה-MemberOf ומחלצים רק את השם ===
+    let parsedGroups: string[] = [];
+    if (adData.MemberOf) {
+        // AD יכול להחזיר מחרוזת בודדת (אם יש קבוצה אחת) או מערך של מחרוזות
+        const rawGroups = Array.isArray(adData.MemberOf) ? adData.MemberOf : [adData.MemberOf];
+        
+        parsedGroups = rawGroups.map((g: any) => {
+            if (typeof g === 'string') {
+                // לוקח את "CN=TrafficLights_Developer,OU=Roles"
+                // חותך בפסיק הראשון ולוקח רק את החלק של ה-CN, ואז מוריד את ה-"CN="
+                return g.split(',')[0].replace('CN=', '').trim();
+            }
+            return '';
+        }).filter(Boolean); // מסנן החוצה ערכים ריקים
+    }
+
     const fullUser = {
       username: username,
       displayName: adData.Name || username,
       department: adData.Department || 'כללי',
-      title: adData.Title || '',           // <--- שמרנו את הטייטל
-      groups: adData.Groups || [],         // <--- שמרנו את כל הקבוצות שהמשתמש חבר בהן!
+      title: adData.Title || '',           
+      groups: parsedGroups,         // <--- עכשיו זה מערך אמיתי עם שמות הקבוצות!
       ipAddress: clientIp,
       computerName: computerName 
     };
