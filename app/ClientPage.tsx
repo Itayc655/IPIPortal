@@ -933,28 +933,42 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                             // 1. סינון לפי הרשאות צפייה של הכרטיסייה
                             const visibilityStr = item.visibility || 'הכל';
                             if (!isEditMode && visibilityStr !== 'הכל') {
-                                const userDept = initialUser?.department?.toLowerCase() || "";
-                                const userName = initialUser?.username?.toLowerCase() || "";
-                                const userTitle = initialUser?.title?.toLowerCase() || ""; // התוספת החדשה: שולפים את הטייטל
+                                // הגנות: מוודאים שלא קורסים אם אחד הערכים מה-AD חסר (null)
+                                const userDept = initialUser?.department ? String(initialUser.department).toLowerCase() : "";
+                                const userName = initialUser?.username ? String(initialUser.username).toLowerCase() : "";
+                                const userTitle = initialUser?.title ? String(initialUser.title).toLowerCase() : "";
+                                const userGroups = Array.isArray(initialUser?.groups) ? initialUser.groups : [];
 
-                                const allowedUsersOrDepts = visibilityStr.toLowerCase().split(',').map((s: string) => s.trim());
+                                // הגנה: תמיכה גם אם visibility הוא מערך (Array) וגם אם הוא טקסט מופרד בפסיקים (String)
+                                const visibilityArray = typeof visibilityStr === 'string'
+                                    ? visibilityStr.split(',')
+                                    : (Array.isArray(visibilityStr) ? visibilityStr : []);
 
-                                // אם המחלקה, השם, או הטייטל שלו לא ברשימה - הוא לא יראה את הכרטיסייה
+                                // מנקים רווחים והופכים לאותיות קטנות רק אם הערך קיים
+                                const allowedUsersOrDepts = visibilityArray.map((s: any) => s ? String(s).toLowerCase().trim() : "");
+
+                                // בדיקת קבוצות בטוחה! (בודק ש-group לא null לפני שהוא עושה toLowerCase)
+                                const hasGroupAccess = userGroups.some((group: any) =>
+                                    group && allowedUsersOrDepts.includes(String(group).toLowerCase())
+                                );
+
+                                // אם המחלקה, השם, הטייטל או אחת מהקבוצות שלו לא ברשימה - הוא חסום
                                 if (!allowedUsersOrDepts.includes(userDept) &&
                                     !allowedUsersOrDepts.includes(userName) &&
-                                    !allowedUsersOrDepts.includes(userTitle)) { // התוספת החדשה: בודקים גם את הטייטל
+                                    !allowedUsersOrDepts.includes(userTitle) &&
+                                    !hasGroupAccess) {
                                     return false;
                                 }
                             }
 
-                            // 2. סינון לפי חיפוש טקסט רגיל
+                            // 2. סינון לפי חיפוש טקסט רגיל (עם הגנות מ-null)
                             if (!searchTerm) return true;
                             return Object.entries(item.data).some(([key, val]: any) => {
-                                if (Array.isArray(val)) return val.some((f: any) => f.name.toLowerCase().includes(searchTerm.toLowerCase()));
+                                // הוספנו f.name? כדי שאם חסר שם לקובץ, זה לא יקריס את החיפוש
+                                if (Array.isArray(val)) return val.some((f: any) => f && f.name && f.name.toLowerCase().includes(searchTerm.toLowerCase()));
                                 return typeof val === 'string' && val.toLowerCase().includes(searchTerm.toLowerCase());
                             });
                         });
-
                         // הסתרת קטגוריות ריקות במצב צפייה
                         if (!isEditMode && visibleItems.length === 0) return null;
 
@@ -1034,9 +1048,6 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                 {/* תגית הרשאות שמופיעה רק למנהל על הכרטיסייה עצמה */}
                                                 {isEditMode && item.visibility && item.visibility !== 'הכל' && (
                                                     <div className="absolute top-3 right-3 z-30 pointer-events-none">
-                                                        <span className="bg-slate-900 text-white text-[10px] 2xl:text-xs font-bold px-2.5 py-1 rounded-md shadow-md border border-slate-700 opacity-90">
-                                                            🔒 מוגבל: {item.visibility}
-                                                        </span>
                                                     </div>
                                                 )}
 
@@ -1531,132 +1542,132 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                     ))}
                                                 </div>
                                             </div>
-                                );
-                                    })()}
-                                <p className="text-xs text-slate-400 mt-2 font-medium">הקלד שם ולחץ Enter. ברגע שתוסיף מורשים, הכרטיסייה תינעל רק אליהם.</p>
-                            </div>
-                        </div>
-                        <div className="space-y-6 max-h-[60vh] overflow-y-auto px-1">
-                            {/* יצירת אינפוטים דינמיים לפי הסכמה */}
-                            {targetSection.schema.map((field: any, idx: number) => (
-                                <div key={field.key}>
-                                    <label className="block text-sm font-bold text-slate-400 uppercase mb-2">{field.label}</label>
-
-                                    {field.type === 'text' && <input className={`w-full border border-slate-200 rounded-2xl p-4 outline-none focus:border-slate-500 focus:ring-4 focus:ring-slate-100 transition-all ${idx === 0 ? 'text-xl font-bold' : ''}`} placeholder={idx === 0 ? `הכנס ${field.label}...` : ''} value={newItemData[field.key] || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })} />}
-                                    {field.type === 'textarea' && <textarea rows={4} className="w-full border border-slate-200 rounded-2xl p-4 outline-none focus:border-slate-500 focus:ring-4 focus:ring-slate-100 transition-all text-lg" value={newItemData[field.key] || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })} />}
-                                    {field.type === 'link' && (
-                                        <div className="relative">
-                                            <div className="absolute top-4 right-4 text-slate-400 pointer-events-none"><LinkIcon size={20} /></div>
-                                            <input className="w-full border border-slate-200 rounded-2xl p-4 pr-12 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 text-left dir-ltr transition-all font-mono text-base" placeholder="https://..." value={newItemData[field.key] || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })} />
-                                        </div>
-                                    )}
-                                    {field.type === 'file' && (
-                                        <div className="space-y-3">
-                                            <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-slate-50 transition-colors border-slate-300`}>
-                                                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                                    <Upload size={24} className="text-slate-400" />
-                                                    <p className="mb-2 text-sm text-slate-500 font-bold mt-2">לחץ להעלאת קבצים</p>
-                                                </div>
-                                                <input type="file" multiple className="hidden" onChange={(e) => handleFileSelect(e, field.key)} />
-                                            </label>
-                                            {Array.isArray(newItemData[field.key]) && newItemData[field.key].length > 0 && (
-                                                <div className="grid grid-cols-1 gap-2">
-                                                    {newItemData[field.key].map((f: any, i: number) => (
-                                                        <div key={i} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
-                                                            <div className="flex items-center gap-2 overflow-hidden">
-                                                                <File size={16} className="text-slate-400 shrink-0" />
-                                                                <span className="text-sm font-bold text-slate-700 truncate">{f.name}</span>
-                                                            </div>
-                                                            <button onClick={() => handleRemoveFile(field.key, i)} className="text-slate-300 cursor-pointer hover:text-red-500 p-1"><X size={18} /></button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                    {field.type === 'password' && (
-                                        <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 grid grid-cols-2 gap-4">
-                                            <input className="w-full border border-amber-200 rounded-xl p-3 outline-none text-base bg-white" placeholder="שם משתמש" value={newItemData[field.key]?.username || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: { ...newItemData[field.key], username: e.target.value } })} />
-                                            <input className="w-full border border-amber-200 rounded-xl p-3 outline-none text-base bg-white" placeholder="סיסמה" value={newItemData[field.key]?.password || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: { ...newItemData[field.key], password: e.target.value } })} />
-                                        </div>
-                                    )}
-                                    {field.type === 'phonebook' && (() => {
-                                        const rows = Array.isArray(newItemData[field.key]) ? newItemData[field.key] : [];
-                                        const updateRow = (index: number, fieldName: string, val: string) => { const newRows = [...rows]; newRows[index] = { ...newRows[index], [fieldName]: val }; setNewItemData({ ...newItemData, [field.key]: newRows }); };
-                                        const addRow = () => { setNewItemData({ ...newItemData, [field.key]: [...rows, { name: '', department: '', role: '', phone: '', ext: '' }] }); };
-                                        const removeRow = (index: number) => { const newRows = rows.filter((_: any, i: number) => i !== index); setNewItemData({ ...newItemData, [field.key]: newRows }); };
-                                        return (
-                                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                                                <div className="space-y-3">
-                                                    {rows.map((row: any, i: number) => (
-                                                        <div key={i} className="flex gap-2 items-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
-                                                            <div className="bg-slate-100 w-8 h-8 flex items-center justify-center rounded-full text-xs font-bold shrink-0">{i + 1}</div>
-                                                            <input placeholder="שם מלא" className="w-1/5 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.name} onChange={e => updateRow(i, 'name', e.target.value)} />
-                                                            <div className="w-px h-6 bg-slate-100"></div>
-                                                            <input placeholder="מחלקה" className="w-1/5 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.department || ''} onChange={e => updateRow(i, 'department', e.target.value)} />
-                                                            <div className="w-px h-6 bg-slate-100"></div>
-                                                            <input placeholder="תפקיד" className="w-1/5 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.role} onChange={e => updateRow(i, 'role', e.target.value)} />
-                                                            <div className="w-px h-6 bg-slate-100"></div>
-                                                            <input placeholder="נייד" className="w-1/5 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.phone} onChange={e => updateRow(i, 'phone', e.target.value)} />
-                                                            <div className="w-px h-6 bg-slate-100"></div>
-                                                            <input placeholder="שלוחה" className="w-20 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.ext} onChange={e => updateRow(i, 'ext', e.target.value)} />
-                                                            <button onClick={() => removeRow(i)} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={16} /></button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <button onClick={addRow} className="mt-4 flex items-center gap-2 text-sm font-bold text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg transition-colors cursor-pointer">
-                                                    <Plus size={16} /> הוסף עובד
-                                                </button>
-                                            </div>
                                         );
                                     })()}
+                                    <p className="text-xs text-slate-400 mt-2 font-medium">הקלד שם ולחץ Enter. ברגע שתוסיף מורשים, הכרטיסייה תינעל רק אליהם.</p>
                                 </div>
-                            ))}
+                            </div>
+                            <div className="space-y-6 max-h-[60vh] overflow-y-auto px-1">
+                                {/* יצירת אינפוטים דינמיים לפי הסכמה */}
+                                {targetSection.schema.map((field: any, idx: number) => (
+                                    <div key={field.key}>
+                                        <label className="block text-sm font-bold text-slate-400 uppercase mb-2">{field.label}</label>
+
+                                        {field.type === 'text' && <input className={`w-full border border-slate-200 rounded-2xl p-4 outline-none focus:border-slate-500 focus:ring-4 focus:ring-slate-100 transition-all ${idx === 0 ? 'text-xl font-bold' : ''}`} placeholder={idx === 0 ? `הכנס ${field.label}...` : ''} value={newItemData[field.key] || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })} />}
+                                        {field.type === 'textarea' && <textarea rows={4} className="w-full border border-slate-200 rounded-2xl p-4 outline-none focus:border-slate-500 focus:ring-4 focus:ring-slate-100 transition-all text-lg" value={newItemData[field.key] || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })} />}
+                                        {field.type === 'link' && (
+                                            <div className="relative">
+                                                <div className="absolute top-4 right-4 text-slate-400 pointer-events-none"><LinkIcon size={20} /></div>
+                                                <input className="w-full border border-slate-200 rounded-2xl p-4 pr-12 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 text-left dir-ltr transition-all font-mono text-base" placeholder="https://..." value={newItemData[field.key] || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })} />
+                                            </div>
+                                        )}
+                                        {field.type === 'file' && (
+                                            <div className="space-y-3">
+                                                <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-slate-50 transition-colors border-slate-300`}>
+                                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                                        <Upload size={24} className="text-slate-400" />
+                                                        <p className="mb-2 text-sm text-slate-500 font-bold mt-2">לחץ להעלאת קבצים</p>
+                                                    </div>
+                                                    <input type="file" multiple className="hidden" onChange={(e) => handleFileSelect(e, field.key)} />
+                                                </label>
+                                                {Array.isArray(newItemData[field.key]) && newItemData[field.key].length > 0 && (
+                                                    <div className="grid grid-cols-1 gap-2">
+                                                        {newItemData[field.key].map((f: any, i: number) => (
+                                                            <div key={i} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                                                <div className="flex items-center gap-2 overflow-hidden">
+                                                                    <File size={16} className="text-slate-400 shrink-0" />
+                                                                    <span className="text-sm font-bold text-slate-700 truncate">{f.name}</span>
+                                                                </div>
+                                                                <button onClick={() => handleRemoveFile(field.key, i)} className="text-slate-300 cursor-pointer hover:text-red-500 p-1"><X size={18} /></button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        {field.type === 'password' && (
+                                            <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 grid grid-cols-2 gap-4">
+                                                <input className="w-full border border-amber-200 rounded-xl p-3 outline-none text-base bg-white" placeholder="שם משתמש" value={newItemData[field.key]?.username || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: { ...newItemData[field.key], username: e.target.value } })} />
+                                                <input className="w-full border border-amber-200 rounded-xl p-3 outline-none text-base bg-white" placeholder="סיסמה" value={newItemData[field.key]?.password || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: { ...newItemData[field.key], password: e.target.value } })} />
+                                            </div>
+                                        )}
+                                        {field.type === 'phonebook' && (() => {
+                                            const rows = Array.isArray(newItemData[field.key]) ? newItemData[field.key] : [];
+                                            const updateRow = (index: number, fieldName: string, val: string) => { const newRows = [...rows]; newRows[index] = { ...newRows[index], [fieldName]: val }; setNewItemData({ ...newItemData, [field.key]: newRows }); };
+                                            const addRow = () => { setNewItemData({ ...newItemData, [field.key]: [...rows, { name: '', department: '', role: '', phone: '', ext: '' }] }); };
+                                            const removeRow = (index: number) => { const newRows = rows.filter((_: any, i: number) => i !== index); setNewItemData({ ...newItemData, [field.key]: newRows }); };
+                                            return (
+                                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                                                    <div className="space-y-3">
+                                                        {rows.map((row: any, i: number) => (
+                                                            <div key={i} className="flex gap-2 items-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
+                                                                <div className="bg-slate-100 w-8 h-8 flex items-center justify-center rounded-full text-xs font-bold shrink-0">{i + 1}</div>
+                                                                <input placeholder="שם מלא" className="w-1/5 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.name} onChange={e => updateRow(i, 'name', e.target.value)} />
+                                                                <div className="w-px h-6 bg-slate-100"></div>
+                                                                <input placeholder="מחלקה" className="w-1/5 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.department || ''} onChange={e => updateRow(i, 'department', e.target.value)} />
+                                                                <div className="w-px h-6 bg-slate-100"></div>
+                                                                <input placeholder="תפקיד" className="w-1/5 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.role} onChange={e => updateRow(i, 'role', e.target.value)} />
+                                                                <div className="w-px h-6 bg-slate-100"></div>
+                                                                <input placeholder="נייד" className="w-1/5 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.phone} onChange={e => updateRow(i, 'phone', e.target.value)} />
+                                                                <div className="w-px h-6 bg-slate-100"></div>
+                                                                <input placeholder="שלוחה" className="w-20 p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-500 text-sm" value={row.ext} onChange={e => updateRow(i, 'ext', e.target.value)} />
+                                                                <button onClick={() => removeRow(i)} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={16} /></button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <button onClick={addRow} className="mt-4 flex items-center gap-2 text-sm font-bold text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg transition-colors cursor-pointer">
+                                                        <Plus size={16} /> הוסף עובד
+                                                    </button>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                ))}
+                            </div>
+                            <button onClick={handleSaveItem} className={`w-full ${colors.bg} text-white py-5 rounded-2xl cursor-pointer font-bold text-xl mt-8 hover:opacity-90 shadow-lg shadow-slate-200`}>
+                                {editingItemId ? 'עדכן פריט' : 'שמור פריט'}
+                            </button>
                         </div>
-                        <button onClick={handleSaveItem} className={`w-full ${colors.bg} text-white py-5 rounded-2xl cursor-pointer font-bold text-xl mt-8 hover:opacity-90 shadow-lg shadow-slate-200`}>
-                            {editingItemId ? 'עדכן פריט' : 'שמור פריט'}
-                        </button>
                     </div>
+                );
+            })()}
+
+            {/* --- מודל 4: התחברות למצב אדמין --- */}
+            {
+                showLoginModal && (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]" onClick={() => setShowLoginModal(false)}>
+                        <div className="bg-white p-10 rounded-[2.5rem] w-96 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                            <h3 className="font-bold text-2xl mb-8">כניסה למערכת</h3>
+                            <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
+                                <input className="w-full border bg-slate-50 p-4 mb-3 rounded-2xl outline-none focus:border-red-500 text-lg" placeholder="שם משתמש" value={loginCredentials.username} onChange={e => setLoginCredentials({ ...loginCredentials, username: e.target.value })} autoFocus />
+                                <input className="w-full border bg-slate-50 p-4 mb-8 rounded-2xl outline-none focus:border-red-500 text-lg" type="password" placeholder="סיסמה" value={loginCredentials.password} onChange={e => setLoginCredentials({ ...loginCredentials, password: e.target.value })} />
+                                <button type="submit" className="bg-slate-900 text-white px-6 py-4 rounded-2xl w-full font-bold text-lg hover:bg-slate-700 hover:scale-[1.02] cursor-pointer active:scale-95 transition-all shadow-lg hover:shadow-slate-500/30">התחבר</button>
+                            </form>
+                            <button onClick={() => setShowLoginModal(false)} className="text-sm text-slate-400 mt-6 cursor-pointer hover:text-slate-600">ביטול</button>
+                        </div>
                     </div>
-    );
-}) ()}
+                )
+            }
 
-{/* --- מודל 4: התחברות למצב אדמין --- */ }
-{
-    showLoginModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]" onClick={() => setShowLoginModal(false)}>
-            <div className="bg-white p-10 rounded-[2.5rem] w-96 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <h3 className="font-bold text-2xl mb-8">כניסה למערכת</h3>
-                <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
-                    <input className="w-full border bg-slate-50 p-4 mb-3 rounded-2xl outline-none focus:border-red-500 text-lg" placeholder="שם משתמש" value={loginCredentials.username} onChange={e => setLoginCredentials({ ...loginCredentials, username: e.target.value })} autoFocus />
-                    <input className="w-full border bg-slate-50 p-4 mb-8 rounded-2xl outline-none focus:border-red-500 text-lg" type="password" placeholder="סיסמה" value={loginCredentials.password} onChange={e => setLoginCredentials({ ...loginCredentials, password: e.target.value })} />
-                    <button type="submit" className="bg-slate-900 text-white px-6 py-4 rounded-2xl w-full font-bold text-lg hover:bg-slate-700 hover:scale-[1.02] cursor-pointer active:scale-95 transition-all shadow-lg hover:shadow-slate-500/30">התחבר</button>
-                </form>
-                <button onClick={() => setShowLoginModal(false)} className="text-sm text-slate-400 mt-6 cursor-pointer hover:text-slate-600">ביטול</button>
-            </div>
-        </div>
-    )
-}
-
-{/* --- מודל 5: בדיקת אבטחה לחשיפת סיסמאות --- */ }
-{
-    showSecurityModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[70] backdrop-blur-sm" onClick={() => setShowSecurityModal(false)}>
-            <div className="bg-white p-8 rounded-3xl w-80 text-center shadow-2xl border border-slate-100 animate-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
-                <div className="bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600">
-                    <Lock size={32} />
-                </div>
-                <h3 className="font-black text-xl mb-2 text-slate-800">בדיקת אבטחה</h3>
-                <p className="text-slate-500 text-sm mb-6 font-medium">נא להזין סיסמה לצפייה/העתקה</p>
-                <form onSubmit={handleSecurityVerify}>
-                    <input type="password" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl mb-4 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100 text-center font-bold text-lg tracking-widest" placeholder="******" value={securityInput} onChange={e => setSecurityInput(e.target.value)} autoFocus />
-                    <button type="submit" className="bg-slate-900 text-white w-full py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">אישור</button>
-                </form>
-                <button onClick={() => setShowSecurityModal(false)} className="mt-4 text-sm text-slate-400 font-bold hover:text-slate-600">ביטול</button>
-            </div>
-        </div>
-    )
-}
+            {/* --- מודל 5: בדיקת אבטחה לחשיפת סיסמאות --- */}
+            {
+                showSecurityModal && (
+                    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[70] backdrop-blur-sm" onClick={() => setShowSecurityModal(false)}>
+                        <div className="bg-white p-8 rounded-3xl w-80 text-center shadow-2xl border border-slate-100 animate-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
+                            <div className="bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600">
+                                <Lock size={32} />
+                            </div>
+                            <h3 className="font-black text-xl mb-2 text-slate-800">בדיקת אבטחה</h3>
+                            <p className="text-slate-500 text-sm mb-6 font-medium">נא להזין סיסמה לצפייה/העתקה</p>
+                            <form onSubmit={handleSecurityVerify}>
+                                <input type="password" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl mb-4 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100 text-center font-bold text-lg tracking-widest" placeholder="******" value={securityInput} onChange={e => setSecurityInput(e.target.value)} autoFocus />
+                                <button type="submit" className="bg-slate-900 text-white w-full py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">אישור</button>
+                            </form>
+                            <button onClick={() => setShowSecurityModal(false)} className="mt-4 text-sm text-slate-400 font-bold hover:text-slate-600">ביטול</button>
+                        </div>
+                    </div>
+                )
+            }
 
         </div >
     );

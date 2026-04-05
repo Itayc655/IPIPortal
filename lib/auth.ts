@@ -49,8 +49,7 @@ export async function getCurrentUser() {
   // תופסים את ה-IP הגולמי
   let rawIp = headersList.get('x-forwarded-for') || headersList.get('remote-addr') || 'unknown';
   
-  // === התיקון! חותכים את הפורט המשתנה ===
-  // הופך את "192.168.1.76:49222" ל-"192.168.1.76"
+  // חותכים את הפורט המשתנה
   const clientIp = rawIp.split(',')[0].split(':')[0].trim();
 
   let username = '';
@@ -59,7 +58,7 @@ export async function getCurrentUser() {
   if (authHeader && authHeader.startsWith('NTLM ')) {
     username = decodeNTLM(authHeader);
     if (username) {
-      ipToUserCache.set(clientIp, username); // שומרים רק את ה-IP הנקי!
+      ipToUserCache.set(clientIp, username); 
     }
   }
 
@@ -70,7 +69,7 @@ export async function getCurrentUser() {
 
   // אם אחרי הכל לא מצאנו כלום, זה אורח
   if (!username) {
-    return { username: 'אורח', displayName: 'אורח', department: 'כללי' };
+    return { username: 'אורח', displayName: 'אורח', department: 'כללי', title: '', groups: [] };
   }
 
   // בדיקת זיכרון מטמון מול ה-AD
@@ -86,8 +85,8 @@ export async function getCurrentUser() {
 
   for (const server of adServers) {
     try {
-      // === התיקון: מבקשים רק Name ו-Department ===
-      const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "chcp 65001 >$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ADUser -Identity '${username}' -Server '${server}' -Properties Name,Department | Select-Object Name,Department | ConvertTo-Json"`;
+      // === התיקון הגדול: מושכים גם טייטל וגם מריצים פקודה שמביאה את רשימת הקבוצות הנקייה ===
+      const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "chcp 65001 >$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $u = Get-ADUser -Identity '${username}' -Server '${server}' -Properties Name,Department,Title; $g = Get-ADPrincipalGroupMembership -Identity '${username}' -Server '${server}' | Select-Object -ExpandProperty Name; [PSCustomObject]@{ Name=$u.Name; Department=$u.Department; Title=$u.Title; Groups=@($g) } | ConvertTo-Json"`;
 
       const { stdout } = await execPromise(psCommand, { 
           encoding: 'utf8', 
@@ -109,7 +108,7 @@ export async function getCurrentUser() {
 
   if (!adData) {
       console.error("❌ תקלה קריטית: אף שרת AD לא זמין!");
-      return { username, displayName: username, department: 'כללי', ipAddress: clientIp, computerName };
+      return { username, displayName: username, department: 'כללי', title: '', groups: [], ipAddress: clientIp, computerName };
   }
 
   try {
@@ -117,8 +116,10 @@ export async function getCurrentUser() {
       username: username,
       displayName: adData.Name || username,
       department: adData.Department || 'כללי',
+      title: adData.Title || '',           // <--- שמרנו את הטייטל
+      groups: adData.Groups || [],         // <--- שמרנו את כל הקבוצות שהמשתמש חבר בהן!
       ipAddress: clientIp,
-      computerName: computerName // <--- הוספנו את שם המחשב!
+      computerName: computerName 
     };
 
     userCache.set(username, { data: fullUser, timestamp: now });
@@ -126,6 +127,6 @@ export async function getCurrentUser() {
 
   } catch (error) {
     console.error("AD Parsing Error:", error);
-    return { username, displayName: username, department: 'כללי', ipAddress: clientIp, computerName };
+    return { username, displayName: username, department: 'כללי', title: '', groups: [], ipAddress: clientIp, computerName };
   }
 }

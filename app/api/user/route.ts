@@ -13,14 +13,14 @@ export async function GET(request: Request) {
   if (searchTerm) {
     try {
       const adServers = ['192.168.1.243', '192.168.1.244'];
-      
+
       for (const server of adServers) {
         try {
-          // פקודת PowerShell שרצה בשרת ומחפשת התאמה
-          const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "chcp 65001 >$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ADUser -Filter \\"SamAccountName -eq '${searchTerm}' -or Title -eq '${searchTerm}'\\" -Server '${server}' | Select-Object SamAccountName"`;
-
+         
+          // אנחנו מחפשים כעת אובייקט ב-AD: האם יש משתמש או קבוצת הרשאות בשם שהוקלד?
+          const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "chcp 65001 >$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ADObject -Filter \\"sAMAccountName -eq '${searchTerm}' -or Name -eq '${searchTerm}'\\" -Server '${server}' | Select-Object Name"`;
           const { stdout } = await execPromise(psCommand, { windowsHide: true });
-          
+
           if (stdout && stdout.trim()) {
             return NextResponse.json({ exists: true });
           }
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
           // שרת לא זמין או משתמש לא נמצא - נסה את השרת הבא
         }
       }
-      
+
       return NextResponse.json({ exists: false });
 
     } catch (error) {
