@@ -1368,20 +1368,30 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                     </div>
                                                 </div>
                                             )}
-                                            {field.type === 'folder' && (
-                                                <div className="relative">
-                                                    <div className="absolute top-4 right-4 text-slate-400 pointer-events-none">
-                                                        <Folder size={20} />
+                                            {field.type === 'folder' && isString && (
+                                                <button
+                                                    onClick={() => {
+                                                        let fileUrl = (rawVal as string).replace(/\\/g, '/');
+                                                        let finalUrl = (rawVal as string).startsWith('\\\\')
+                                                            ? 'file://' + fileUrl.substring(2)
+                                                            : 'file:///' + fileUrl;
+                                                        window.open(finalUrl, '_blank', 'noopener,noreferrer');
+                                                    }}
+                                                    /* העיצוב השורתי: flex, p-4, background עדין, rounded-2xl */
+                                                    className={`flex items-center gap-3.5 font-bold text-lg ${colors.text} hover:bg-${viewItem.section.color}-100 bg-${viewItem.section.color}-50 p-4 rounded-2xl transition-colors dir-ltr w-fit group`}
+                                                >
+                                                    {/* אייקון התיקייה - מיושר לצד */}
+                                                    <div className={`text-${viewItem.section.color}-500 group-hover:scale-110 transition-transform`}>
+                                                        <Folder size={24} />
                                                     </div>
-                                                    <input
-                                                        className="w-full border border-slate-200 rounded-2xl p-4 pr-12 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 text-left dir-ltr transition-all font-mono text-base"
-                                                        placeholder="\\server\share\folder או S:\Folder"
-                                                        value={newItemData[field.key] || ''}
-                                                        onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })}
-                                                    />
-                                                </div>
-                                            )}
 
+                                                    {/* הנתיב - עם truncate כדי לא לשבור את השורה */}
+                                                    <span className="truncate flex-1 font-mono text-base">{rawVal}</span>
+
+                                                    {/* אייקון ה'יציאה' - קטן ובצד, כמו בכחול */}
+                                                    <ExternalLink size={18} className="opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
+                                                </button>
+                                            )}
                                             {field.type === 'phonebook' && isArray && rawVal.length > 0 && (
                                                 <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
                                                     <table className="w-full text-right text-sm">
@@ -1625,28 +1635,17 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                 <input className="w-full border border-slate-200 rounded-2xl p-4 pr-12 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 text-left dir-ltr transition-all font-mono text-base" placeholder="https://..." value={newItemData[field.key] || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })} />
                                             </div>
                                         )}
-                                        {field.type === 'file' && (
-                                            <div className="space-y-3">
-                                                <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer hover:bg-slate-50 transition-colors border-slate-300`}>
-                                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                                        <Upload size={24} className="text-slate-400" />
-                                                        <p className="mb-2 text-sm text-slate-500 font-bold mt-2">לחץ להעלאת קבצים</p>
-                                                    </div>
-                                                    <input type="file" multiple className="hidden" onChange={(e) => handleFileSelect(e, field.key)} />
-                                                </label>
-                                                {Array.isArray(newItemData[field.key]) && newItemData[field.key].length > 0 && (
-                                                    <div className="grid grid-cols-1 gap-2">
-                                                        {newItemData[field.key].map((f: any, i: number) => (
-                                                            <div key={i} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
-                                                                <div className="flex items-center gap-2 overflow-hidden">
-                                                                    <File size={16} className="text-slate-400 shrink-0" />
-                                                                    <span className="text-sm font-bold text-slate-700 truncate">{f.name}</span>
-                                                                </div>
-                                                                <button onClick={() => handleRemoveFile(field.key, i)} className="text-slate-300 cursor-pointer hover:text-red-500 p-1"><X size={18} /></button>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
+                                        {field.type === 'folder' && (
+                                            <div className="relative">
+                                                <div className="absolute top-4 right-4 text-slate-400 pointer-events-none">
+                                                    <Folder size={20} />
+                                                </div>
+                                                <input
+                                                    className="w-full border border-slate-200 rounded-2xl p-4 pr-12 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 text-left dir-ltr transition-all font-mono text-base bg-white"
+                                                    placeholder="\\server\share\folder או S:\Folder"
+                                                    value={newItemData[field.key] || ''}
+                                                    onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })}
+                                                />
                                             </div>
                                         )}
                                         {field.type === 'password' && (
@@ -1655,19 +1654,6 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                 <input className="w-full border border-amber-200 rounded-xl p-3 outline-none text-base bg-white" placeholder="סיסמה" value={newItemData[field.key]?.password || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: { ...newItemData[field.key], password: e.target.value } })} />
                                             </div>
                                         )}
-                                        {field.type === 'folder' && (
-                                        <div className="relative">
-                                            <div className="absolute top-4 right-4 text-slate-400 pointer-events-none">
-                                                <Folder size={20} />
-                                            </div>
-                                            <input 
-                                                className="w-full border border-slate-200 rounded-2xl p-4 pr-12 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 text-left dir-ltr transition-all font-mono text-base" 
-                                                placeholder="\\server\share\folder או S:\Folder" 
-                                                value={newItemData[field.key] || ''} 
-                                                onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })} 
-                                            />
-                                        </div>
-                                    )}
                                         {field.type === 'phonebook' && (() => {
                                             const rows = Array.isArray(newItemData[field.key]) ? newItemData[field.key] : [];
                                             const updateRow = (index: number, fieldName: string, val: string) => { const newRows = [...rows]; newRows[index] = { ...newRows[index], [fieldName]: val }; setNewItemData({ ...newItemData, [field.key]: newRows }); };
