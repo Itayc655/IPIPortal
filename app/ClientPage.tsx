@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search, Plus, FileText, Trash2, X, Key, Lock, Unlock, Edit,
-    ExternalLink, Copy, Check, LayoutGrid, Link as LinkIcon, File, Eye, Upload, Download, EyeOff, GripVertical, Gift
+    ExternalLink, Copy, Check, LayoutGrid, Link as LinkIcon, File, Eye, Upload, Download, EyeOff, GripVertical, Gift, Folder
 } from 'lucide-react';
 import {
     DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -93,6 +93,7 @@ function SortableField({ field, idx, updateFieldInSchema, removeFieldFromSchema 
                 <option value="link">🔗 קישור (URL)</option>
                 <option value="password">🔑 שם משתמש וסיסמה</option>
                 <option value="file">📁 קבצים (מרובה)</option>
+                <option value="folder">תיקיית רשת / כונן</option>
             </select>
 
             <button onClick={() => removeFieldFromSchema(field.key)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-full hover:bg-red-50 cursor-pointer">
@@ -227,7 +228,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
             console.error("שגיאה במשיכת הנתונים המאובטחים:", e);
         }
     };
-    
+
     // טעינה ראשונית: הודעות מערכת
     useEffect(() => {
         const loadMessages = async () => {
@@ -1014,16 +1015,41 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                 onClick={() => {
                                                     try {
                                                         if (isEditMode) { setViewItem({ item, section }); return; }
-                                                        let foundUrl = null; let foundUrlKey = null;
+
+                                                        let foundUrl = null;
+                                                        let foundUrlKey = null;
+
                                                         if (item?.data) {
                                                             for (const key in item.data) {
                                                                 const val = item.data[key];
-                                                                if (typeof val === 'string' && (val.startsWith('http') || val.startsWith('www.'))) {
-                                                                    foundUrl = val.startsWith('www.') ? 'https://' + val : val;
-                                                                    foundUrlKey = key; break;
+                                                                if (typeof val === 'string') {
+                                                                    // 1. זיהוי קישור אינטרנט רגיל
+                                                                    if (val.startsWith('http') || val.startsWith('www.')) {
+                                                                        foundUrl = val.startsWith('www.') ? 'https://' + val : val;
+                                                                        foundUrlKey = key;
+                                                                        break;
+                                                                    }
+
+                                                                    // 2. זיהוי נתיב תיקייה (רשת או מקומי) והמרתו לפרוטוקול file
+                                                                    if (val.startsWith('\\\\') || /^[a-zA-Z]:\\/.test(val)) {
+                                                                        let fileUrl = val.replace(/\\/g, '/'); // החלפת לוכסנים
+
+                                                                        if (val.startsWith('\\\\')) {
+                                                                            // נתיב רשת: מ- \\server\folder ל- file://server/folder
+                                                                            foundUrl = 'file://' + fileUrl.substring(2);
+                                                                        } else {
+                                                                            // כונן מקומי: מ- C:\folder ל- file:///C:/folder
+                                                                            foundUrl = 'file:///' + fileUrl;
+                                                                        }
+
+                                                                        foundUrlKey = key;
+                                                                        break;
+                                                                    }
                                                                 }
                                                             }
                                                         }
+
+                                                        // בדיקה אם יש תוכן נוסף (כדי לדעת אם לפתוח מודל או לשגר ישירות)
                                                         let hasExtraContent = false;
                                                         if (item?.data) {
                                                             const titleKey = section?.schema?.[0]?.key;
@@ -1040,9 +1066,16 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                                 if (!isEmpty) { hasExtraContent = true; break; }
                                                             }
                                                         }
-                                                        if (foundUrl && !hasExtraContent) window.open(foundUrl, '_blank', 'noopener,noreferrer');
-                                                        else setViewItem({ item, section });
-                                                    } catch (error) { setViewItem({ item, section }); }
+
+                                                        // החלטת הניתוב
+                                                        if (foundUrl && !hasExtraContent) {
+                                                            window.open(foundUrl, '_blank', 'noopener,noreferrer');
+                                                        } else {
+                                                            setViewItem({ item, section });
+                                                        }
+                                                    } catch (error) {
+                                                        setViewItem({ item, section });
+                                                    }
                                                 }}
                                                 className={`relative group flex flex-col items-center justify-center text-center h-[130px] 2xl:h-[200px] p-4 2xl:p-5 bg-white rounded-[1.2rem] 2xl:rounded-[1.5rem] border-2 ${theme.border} shadow-lg ${theme.shadow} bg-gradient-to-br hover:border-transparent ${theme.gradientFrom} ${theme.gradientTo} hover:shadow-xl ${theme.hoverShadow} transition-all duration-500 ease-in-out hover:-translate-y-1 cursor-pointer overflow-hidden`}
                                             >
@@ -1066,9 +1099,20 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
                                                 {/* טקסט ריחוף (Hover) דינמי - קישור או פריט */}
                                                 <div className={`absolute bottom-3 2xl:bottom-4 text-[10px] font-bold px-3 2xl:px-4 py-1 2xl:py-1.5 rounded-full bg-white/20 backdrop-blur-md text-white border border-white/30 opacity-0 translate-y-3 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-500 delay-100 shadow-sm`}>
-                                                    {item.data.url && !Object.keys(item.data).some(key => key !== 'url' && key !== section.schema[0]?.key && item.data[key] && (!Array.isArray(item.data[key]) || item.data[key].length > 0)) ? 'פתח קישור ↗' : 'לחץ לצפייה'}
-                                                </div>
+                                                    {(() => {
+                                                        // מציאת הפריט הרלוונטי כדי לדעת מה לכתוב
+                                                        const keys = Object.keys(item.data);
+                                                        const folderKey = keys.find(k => typeof item.data[k] === 'string' && (item.data[k].startsWith('\\\\') || /^[a-zA-Z]:\\/.test(item.data[k])));
+                                                        const linkKey = keys.find(k => typeof item.data[k] === 'string' && (item.data[k].startsWith('http') || item.data[k].startsWith('www.')));
 
+                                                        // בדיקה האם זה הפריט היחיד (ללא תוכן נוסף)
+                                                        const isOnlyItem = !keys.some(key => key !== folderKey && key !== linkKey && key !== section.schema[0]?.key && item.data[key] && (!Array.isArray(item.data[key]) || item.data[key].length > 0));
+
+                                                        if (folderKey && isOnlyItem) return 'פתח תיקייה 📁';
+                                                        if (linkKey && isOnlyItem) return 'פתח קישור ↗';
+                                                        return 'לחץ לצפייה';
+                                                    })()}
+                                                </div>
                                                 {/* כפתורי עריכת/מחיקת כרטיסייה (מצב עריכה) */}
                                                 {isEditMode && (
                                                     <div className="absolute top-2 2xl:top-3 left-2 2xl:left-3 flex gap-1 2xl:gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 z-20">
@@ -1324,6 +1368,20 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                     </div>
                                                 </div>
                                             )}
+                                            {field.type === 'folder' && (
+                                                <div className="relative">
+                                                    <div className="absolute top-4 right-4 text-slate-400 pointer-events-none">
+                                                        <Folder size={20} />
+                                                    </div>
+                                                    <input
+                                                        className="w-full border border-slate-200 rounded-2xl p-4 pr-12 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 text-left dir-ltr transition-all font-mono text-base"
+                                                        placeholder="\\server\share\folder או S:\Folder"
+                                                        value={newItemData[field.key] || ''}
+                                                        onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })}
+                                                    />
+                                                </div>
+                                            )}
+
                                             {field.type === 'phonebook' && isArray && rawVal.length > 0 && (
                                                 <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
                                                     <table className="w-full text-right text-sm">
@@ -1597,6 +1655,19 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                 <input className="w-full border border-amber-200 rounded-xl p-3 outline-none text-base bg-white" placeholder="סיסמה" value={newItemData[field.key]?.password || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: { ...newItemData[field.key], password: e.target.value } })} />
                                             </div>
                                         )}
+                                        {field.type === 'folder' && (
+                                        <div className="relative">
+                                            <div className="absolute top-4 right-4 text-slate-400 pointer-events-none">
+                                                <Folder size={20} />
+                                            </div>
+                                            <input 
+                                                className="w-full border border-slate-200 rounded-2xl p-4 pr-12 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 text-left dir-ltr transition-all font-mono text-base" 
+                                                placeholder="\\server\share\folder או S:\Folder" 
+                                                value={newItemData[field.key] || ''} 
+                                                onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })} 
+                                            />
+                                        </div>
+                                    )}
                                         {field.type === 'phonebook' && (() => {
                                             const rows = Array.isArray(newItemData[field.key]) ? newItemData[field.key] : [];
                                             const updateRow = (index: number, fieldName: string, val: string) => { const newRows = [...rows]; newRows[index] = { ...newRows[index], [fieldName]: val }; setNewItemData({ ...newItemData, [field.key]: newRows }); };
