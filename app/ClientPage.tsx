@@ -980,8 +980,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                         if (!isEditMode && visibleItems.length === 0) return null;
 
                         return (
-                            <section key={section.id} className="mb-12 2xl:mb-20 lg:pl-[270px] xl:pl-[290px] 2xl:pl-[320px]">
-
+                            <section key={section.id} className="mb-12 2xl:mb-20 pl-0 lg:pl-[340px] xl:pl-[380px] 2xl:pl-[420px]">
                                 {/* כותרת הקטגוריה ופעולות עריכה */}
                                 <div className="flex items-center gap-3 2xl:gap-4 mb-6 2xl:mb-10">
                                     <h2 className={`text-2xl 2xl:text-3xl font-black flex items-center gap-3 2xl:gap-4 text-slate-800`}>
