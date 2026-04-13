@@ -15,7 +15,8 @@ import {
     arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-
+import IndependenceDayDecor from '@/components/IndependenceDayDecor';
+import MemorialDayBanner, { MemorialType } from '@/components/MemorialDayBanner';
 // ==================== רכיבי עזר (HELPER COMPONENTS) ====================
 
 // רכיב: שורה הניתנת לגרירה בטבלת ספר הטלפונים
@@ -109,7 +110,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
     // ==================== הרשאות ובסיס (PERMISSIONS) ====================
     // רשימת המורשים לעריכה (Admins)
-    const authorizedAdmins = ['itayc', 'gals', 'michaelg'].map(u => u.toLowerCase());
+    const authorizedAdmins = ['itayc', 'gal', 'michaelg'].map(u => u.toLowerCase());
 
     // מעקף סביבת פיתוח: מזהה אם אנחנו רצים מקומית ונותן הרשאות אוטומטית
     const isUserAdmin = process.env.NODE_ENV === 'development'
@@ -131,6 +132,8 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
     const [isEditMode, setIsEditMode] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [loginCredentials, setLoginCredentials] = useState({ username: '', password: '' });
+    const [showHolidayDecor, setShowHolidayDecor] = useState(false);
+    const [memorialDayType, setMemorialDayType] = useState<MemorialType>(null);
 
     // --- סטייט קטגוריות (Section Builder) ---
     const [showCreateSectionModal, setShowCreateSectionModal] = useState(false);
@@ -318,6 +321,17 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
         return () => { document.body.style.overflow = 'unset'; };
     }, [showCreateSectionModal, showAddItemModal, viewItem, showSecurityModal]);
 
+    // סנכרון אוטומטי: כשנכנסים/יוצאים ממצב עריכת פורטל, סנכרן את מצב ספר הטלפונים
+    useEffect(() => {
+        if (isEditMode) {
+            // מעתיק את הנתונים לטיוטה בדיוק כמו שהכפתור היה עושה
+            setDraftPhonebook([...phonebookData]);
+            setIsPhonebookEditMode(true);
+        } else {
+            // כשיוצאים מעריכת הפורטל, סגור גם את עריכת הטבלה
+            setIsPhonebookEditMode(false);
+        }
+    }, [isEditMode]);
 
     // ==================== פונקציות: סכמות וקטגוריות ====================
     const addFieldToSchema = () => {
@@ -784,6 +798,10 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
             {/* ==================== אזור כותרת עליונה (HEADER) ==================== */}
             <header className="max-w-7xl mx-auto px-4 2xl:px-6 py-4 2xl:py-10 flex justify-between items-center relative">
 
+                <IndependenceDayDecor isVisible={showHolidayDecor} />
+                {/* באנר ימי זיכרון שחור */}
+                <MemorialDayBanner type={memorialDayType} />
+
                 {/* צד ימין: לוגו החברה וקישור לאתר */}
                 <div className="flex items-center gap-4 w-48">
                     <a
@@ -847,6 +865,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
             {/* ==================== תוכן מרכזי (MAIN CONTENT) ==================== */}
             <main className="w-full max-w-[1800px] mx-auto px-4 lg:px-6 pb-32">
 
+                {/* --- הגדרות פורטל כלליות (מוצג רק בעריכה) --- */}
                 {/* --- אזור 1: הודעות מערכת רצות (System Messages) --- */}
                 {(!isEditMode && systemMessages.length === 0) ? null : (
                     <section className="mb-12 2xl:mb-16 max-w-3xl xl:max-w-4xl 2xl:max-w-5xl mx-auto relative z-10 px-4">
@@ -1145,6 +1164,19 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                     })}
                 </div>
 
+                {/* --- אזור 3.5: הוספת קטגוריה (מוצג רק בעריכה - מעל ספר הטלפונים) --- */}
+                {isEditMode && (
+                    <section className="mt-12 mb-20 text-center border-t border-slate-100 pt-0">
+                        <button 
+                            onClick={() => { setShowCreateSectionModal(true); setNewSectionFields([{ key: 'f_title', label: 'כותרת ראשית (חובה)', type: 'text' }]); }} 
+                            className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black text-lg cursor-pointer shadow-xl hover:scale-105 transition-transform flex items-center gap-4 mx-auto hover:shadow-slate-500/20"
+                        >
+                            <Plus size={24} /> צור קטגוריה חדשה
+                        </button>
+                        <p className="text-slate-400 mt-4 text-sm font-medium">הוסף קטגוריה חדשה לניהול מוצרים או נהלים</p>
+                    </section>
+                )}
+
 
                 {/* --- אזור 4: ספר טלפונים קבוע בפינה השמאלית תחתונה --- */}
                 <div className="mt-4 md:mt-12 2xl:mt-20 w-full px-4 md:px-8">
@@ -1268,17 +1300,76 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                     </div>
                 </div>
 
-                {/* --- אזור 5: כפתור יצירת קטגוריה חדשה לחלוטין (בתחתית המסך) --- */}
+                {/* --- אזור 5: הגדרות מערכת וסיום הדף (בתחתית המסך) --- */}
                 {isEditMode && (
-                    <div className="text-center mt-24 pt-12 border-t border-slate-200">
-                        <button onClick={() => { setShowCreateSectionModal(true); setNewSectionFields([{ key: 'f_title', label: 'כותרת ראשית (חובה)', type: 'text' }]); }} className="bg-slate-900 text-white px-12 py-6 rounded-3xl font-black text-xl cursor-pointer shadow-xl hover:scale-105 transition-transform flex items-center gap-4 mx-auto">
-                            <Plus size={28} /> צור קטגוריה חדשה
-                        </button>
-                        <p className="text-slate-400 mt-4 text-base font-medium">הגדר איזה שדות ונתונים יהיו בקטגוריה החדשה</p>
+                    <div className="mt-24 pt-12 border-t-2 border-slate-200 max-w-4xl mx-auto px-4 mb-10">
+
+                        <div className="text-center mb-8">
+                            <h3 className="font-black text-slate-400 tracking-wider text-sm md:text-base bg-slate-50 inline-block px-6 py-2 rounded-full border border-slate-200">
+                                הגדרות אווירה מיוחדות
+                            </h3>
+                        </div>
+
+                        {/* קוביות השליטה של החגים (מוסתרות בתחתית) */}
+                        <div className="flex flex-col gap-4 mb-16 opacity-80 hover:opacity-100 transition-opacity duration-300">
+
+                            {/* קישוט יום העצמאות */}
+                            <div className="bg-white p-4 rounded-3xl border border-blue-100 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-blue-50 w-12 h-12 rounded-xl text-blue-600 flex items-center justify-center font-black text-lg">
+                                        IL
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-slate-800 text-base">קישוט יום העצמאות</h4>
+                                        <p className="text-sm text-slate-500 font-medium">הצג שרשרת דגלים מתנפנפת בראש הפורטל</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowHolidayDecor(!showHolidayDecor)}
+                                    className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer ${showHolidayDecor ? 'bg-blue-600 shadow-md shadow-blue-500/30' : 'bg-slate-200'}`}
+                                >
+                                    <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${showHolidayDecor ? '-translate-x-9' : '-translate-x-1'}`} />
+                                </button>
+                            </div>
+
+                            {/* פס ימי הזיכרון */}
+                            <div className="bg-white p-4 rounded-3xl border border-slate-800 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all hover:shadow-md">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-slate-900 w-12 h-12 rounded-xl text-amber-500 flex items-center justify-center text-2xl">
+                                        🕯️
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-slate-800 text-base">פס ימי הזיכרון</h4>
+                                        <p className="text-sm text-slate-500 font-medium">הצג באנר שחור עליון עם נר נשמה</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex bg-slate-50 p-1.5 rounded-2xl border border-slate-100 w-full md:w-auto">
+                                    <button
+                                        onClick={() => setMemorialDayType(null)}
+                                        className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${memorialDayType === null ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        כבוי
+                                    </button>
+                                    <button
+                                        onClick={() => setMemorialDayType('holocaust')}
+                                        className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${memorialDayType === 'holocaust' ? 'bg-slate-900 shadow text-white' : 'text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        יום הזיכרון לשואה
+                                    </button>
+                                    <button
+                                        onClick={() => setMemorialDayType('idf')}
+                                        className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${memorialDayType === 'idf' ? 'bg-slate-900 shadow text-white' : 'text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        יום הזיכרון לחללי צה"ל
+                                    </button>
+                                </div>
+                            </div>
+
+                        </div>
                     </div>
                 )}
             </main>
-
 
             {/* ==================== חלונות קופצים (MODALS) ==================== */}
 
