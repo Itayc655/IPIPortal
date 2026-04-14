@@ -135,6 +135,33 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
     const [showHolidayDecor, setShowHolidayDecor] = useState(false);
     const [memorialDayType, setMemorialDayType] = useState<MemorialType>(null);
 
+    // משיכת מצב החגים כשהעמוד נטען לראשונה
+    useEffect(() => {
+        fetch('/api/settings')
+            .then(res => res.json())
+            .then(data => {
+                setShowHolidayDecor(data.showHolidayDecor || false);
+                setMemorialDayType(data.memorialDayType || null);
+            })
+            .catch(err => console.error("Error loading settings:", err));
+    }, []);
+
+    // פונקציית עזר ששומרת לשרת ברגע שלוחצים על טוגל
+    const saveSettingsImmediately = async (holidayState: boolean, memorialState: MemorialType) => {
+        try {
+            await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    showHolidayDecor: holidayState,
+                    memorialDayType: memorialState
+                })
+            });
+        } catch (error) {
+            console.error("Error saving settings:", error);
+        }
+    };
+
     // --- סטייט קטגוריות (Section Builder) ---
     const [showCreateSectionModal, setShowCreateSectionModal] = useState(false);
     const [newSectionTitle, setNewSectionTitle] = useState("");
@@ -1167,8 +1194,8 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                 {/* --- אזור 3.5: הוספת קטגוריה (מוצג רק בעריכה - מעל ספר הטלפונים) --- */}
                 {isEditMode && (
                     <section className="mt-12 mb-20 text-center border-t border-slate-100 pt-0">
-                        <button 
-                            onClick={() => { setShowCreateSectionModal(true); setNewSectionFields([{ key: 'f_title', label: 'כותרת ראשית (חובה)', type: 'text' }]); }} 
+                        <button
+                            onClick={() => { setShowCreateSectionModal(true); setNewSectionFields([{ key: 'f_title', label: 'כותרת ראשית (חובה)', type: 'text' }]); }}
                             className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black text-lg cursor-pointer shadow-xl hover:scale-105 transition-transform flex items-center gap-4 mx-auto hover:shadow-slate-500/20"
                         >
                             <Plus size={24} /> צור קטגוריה חדשה
@@ -1309,10 +1336,9 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                 הגדרות אווירה מיוחדות
                             </h3>
                         </div>
-
-                        {/* קוביות השליטה של החגים (מוסתרות בתחתית) */}
-                        <div className="flex flex-col gap-4 mb-16 opacity-80 hover:opacity-100 transition-opacity duration-300">
-
+{/* קוביות השליטה של החגים בלבד */}
+                        <div className="flex flex-col gap-4 opacity-80 hover:opacity-100 transition-opacity duration-300">
+                            
                             {/* קישוט יום העצמאות */}
                             <div className="bg-white p-4 rounded-3xl border border-blue-100 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
                                 <div className="flex items-center gap-4">
@@ -1324,8 +1350,12 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                         <p className="text-sm text-slate-500 font-medium">הצג שרשרת דגלים מתנפנפת בראש הפורטל</p>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => setShowHolidayDecor(!showHolidayDecor)}
+                                <button 
+                                    onClick={() => {
+                                        const newState = !showHolidayDecor;
+                                        setShowHolidayDecor(newState);
+                                        saveSettingsImmediately(newState, memorialDayType);
+                                    }}
                                     className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer ${showHolidayDecor ? 'bg-blue-600 shadow-md shadow-blue-500/30' : 'bg-slate-200'}`}
                                 >
                                     <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${showHolidayDecor ? '-translate-x-9' : '-translate-x-1'}`} />
@@ -1343,25 +1373,34 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                         <p className="text-sm text-slate-500 font-medium">הצג באנר שחור עליון עם נר נשמה</p>
                                     </div>
                                 </div>
-
+                                
                                 <div className="flex bg-slate-50 p-1.5 rounded-2xl border border-slate-100 w-full md:w-auto">
-                                    <button
-                                        onClick={() => setMemorialDayType(null)}
+                                    <button 
+                                        onClick={() => {
+                                            setMemorialDayType(null);
+                                            saveSettingsImmediately(showHolidayDecor, null);
+                                        }}
                                         className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${memorialDayType === null ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
                                     >
                                         כבוי
                                     </button>
-                                    <button
-                                        onClick={() => setMemorialDayType('holocaust')}
+                                    <button 
+                                        onClick={() => {
+                                            setMemorialDayType('holocaust');
+                                            saveSettingsImmediately(showHolidayDecor, 'holocaust');
+                                        }}
                                         className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${memorialDayType === 'holocaust' ? 'bg-slate-900 shadow text-white' : 'text-slate-400 hover:text-slate-600'}`}
                                     >
                                         יום הזיכרון לשואה
                                     </button>
-                                    <button
-                                        onClick={() => setMemorialDayType('idf')}
+                                    <button 
+                                        onClick={() => {
+                                            setMemorialDayType('idf');
+                                            saveSettingsImmediately(showHolidayDecor, 'idf');
+                                        }}
                                         className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${memorialDayType === 'idf' ? 'bg-slate-900 shadow text-white' : 'text-slate-400 hover:text-slate-600'}`}
                                     >
-                                        יום הזיכרון לחללי צה"ל
+                                        חללי צה"ל
                                     </button>
                                 </div>
                             </div>
