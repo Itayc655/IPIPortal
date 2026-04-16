@@ -847,19 +847,23 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                     </div>
                 </div>
 
-                {/* אמצע: פרטי המשתמש הנוכחי (שם, מחלקה, IP ומחשב) */}
-                <div className="absolute top-2 2xl:top-4 left-1/2 -translate-x-1/2 text-center font-medium tracking-wide flex flex-col items-center">
-                    <div className="text-slate-400 text-lg 2xl:text-xl">
+                {/* אמצע: פרטי המשתמש הנוכחי (מראה אחיד) */}
+                <div className="absolute top-2 2xl:top-4 left-1/2 -translate-x-1/2 text-center flex flex-col items-center text-slate-600 font-semibold text-sm md:text-base 2xl:text-lg tracking-wide">
+                    
+                    {/* שורה עליונה */}
+                    <div className="flex items-center justify-center">
                         <span>{initialUser?.displayName || initialUser?.username || 'אורח'}</span>
-                        <span className="mx-3 text-slate-200">|</span>
+                        <span className="mx-3 text-slate-400 font-normal">|</span>
                         <span>{initialUser?.department || 'כללי'}</span>
                     </div>
-                    <div className="flex items-center justify-center text-slate-500 text-sm 2xl:text-base mt-1 2xl:mt-1.5">
-                        <span dir="ltr" className="font-mono text-xs 2xl:text-sm mt-0.5">{initialUser?.computerName || 'N/A'}</span>
-                        <span className="mx-2 2xl:mx-3 text-slate-400">|</span>
+
+                    {/* שורה תחתונה */}
+                    <div className="flex items-center justify-center mt-1 2xl:mt-1.5">
+                        <span dir="ltr">{initialUser?.computerName || 'N/A'}</span>
+                        <span className="mx-2 2xl:mx-3 text-slate-400 font-normal">|</span>
                         <span>{initialUser?.username || 'לא ידוע'}</span>
-                        <span className="mx-2 2xl:mx-3 text-slate-400">|</span>
-                        <span dir="ltr" className="font-mono text-xs 2xl:text-sm mt-0.5">{initialUser?.ipAddress || 'לא זמין'}</span>
+                        <span className="mx-2 2xl:mx-3 text-slate-400 font-normal">|</span>
+                        <span dir="ltr">{initialUser?.ipAddress || 'לא זמין'}</span>
                     </div>
                 </div>
 
