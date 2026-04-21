@@ -1,0 +1,358 @@
+================================================================================
+  IPI PORTAL — AI PROMPT TEMPLATE
+  Use this template when asking an AI assistant for help with this project.
+  Fill in the bracketed sections before sending. Delete sections you don't need.
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION A: PROJECT CONTEXT  (always include this)
+────────────────────────────────────────────────────────────────────────────────
+
+I'm working on an internal enterprise portal called IPI Portal.
+
+Tech stack:
+  - Next.js 16 App Router, React 19, TypeScript 5
+  - Tailwind CSS 4, Framer Motion, dnd-kit, Lucide React
+  - Microsoft SQL Server via the `mssql` driver
+  - NTLM Windows authentication decoded in lib/auth.ts
+  - Active Directory enrichment via PowerShell (Get-ADUser)
+  - AES-256-CBC encryption (Node.js crypto) for password fields
+  - xlsx library for Excel import/export (client-side)
+
+Project structure:
+  - app/page.tsx              Server component entry point
+  - app/ClientPage.tsx        Entire UI in one large client component (~1800 lines)
+  - app/layout.tsx            Root layout, loads fonts
+  - app/api/sections/         Main CRUD + visibility filtering + encryption
+  - app/api/auth/             Admin login check
+  - app/api/phonebook/        Contact directory
+  - app/api/messages/         System announcements
+  - app/api/user/             NTLM identity + AD lookup
+  - app/api/settings/         Holiday decoration toggles (JSON file, not SQL)
+  - lib/auth.ts               NTLM decoder, AD enrichment, user cache
+  - lib/db.ts                 MSSQL connection pool singleton
+  - components/               IndependenceDayDecor.tsx, MemorialDayBanner.tsx
+
+Database tables (SQL Server):
+  Sections        (Id, Title, Color, SchemaDef JSON)
+  Items           (Id, SectionId, Data JSON, visibility)
+  SystemMessages  (id, text, date)
+  PhonebookConfig (Id=1, SchemaDef JSON)
+  PhonebookData   (Id=1, Content JSON blob)
+  AuthorizedUsers (Username)
+  GlobalSettings  (SettingKey, SettingValue) — stores EditPassword
+
+Key conventions:
+  - Hebrew strings are used throughout the UI — preserve them exactly
+  - isEditMode controls admin UI — gated by /api/auth password check
+  - Item visibility is a comma-separated string: 'הכל' = everyone,
+    otherwise a list of department names / usernames / AD groups
+  - Password fields are AES encrypted in SQL, decrypted before sending to client
+  - The phonebook uses a draft/commit pattern: draftPhonebook (edit) vs
+    phonebookData (saved). Changes are saved explicitly.
+  - All API routes return HTTP 200 even on auth failure (to avoid browser dialogs)
+  - Direction is RTL (dir="rtl"), layout is right-to-left
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION B: WHAT I'M WORKING ON  (pick one block, fill it in)
+────────────────────────────────────────────────────────────────────────────────
+
+── Option 1: Bug fix ──
+I have a bug in [FILE NAME / COMPONENT NAME].
+
+What's happening:
+  [Describe what the bug does. Be specific — what do you see vs what you expect.]
+
+Steps to reproduce:
+  1. [Step]
+  2. [Step]
+
+Relevant code:
+  [Paste the specific function, useEffect, or API handler — not the whole file]
+
+Error message (if any):
+  [Paste the full error including stack trace]
+
+
+── Option 2: New feature ──
+I want to add [FEATURE NAME].
+
+What it should do:
+  [Describe the desired behavior from a user's perspective]
+
+Where in the codebase it belongs:
+  [e.g. "a new modal in ClientPage.tsx" / "a new API route" / "a new component"]
+
+Constraints:
+  - Must work with existing NTLM auth flow
+  - Must respect the visibility/permissions system
+  - [Any other constraints]
+
+Existing code it interacts with:
+  [Paste relevant existing functions/state/API routes]
+
+
+── Option 3: Refactor ──
+I want to refactor [FILE / FUNCTION / COMPONENT].
+
+Current behavior:
+  [What it does now]
+
+Problem with the current approach:
+  [Why it needs to change — performance, readability, security, etc.]
+
+Desired outcome:
+  [What the refactored version should do differently]
+
+Relevant code:
+  [Paste what needs to change]
+
+
+── Option 4: Security fix ──
+I want to fix [ISSUE ID from PROJECT_MAP.txt, e.g. SEC-1].
+
+Issue summary:
+  [Copy the description from PROJECT_MAP.txt]
+
+Current vulnerable code:
+  [Paste it]
+
+Constraints:
+  - Must not break existing functionality
+  - Must work with the current MSSQL schema
+  - [Any migration notes, e.g. existing encrypted data must remain readable]
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION C: SPECIFIC FILES TO REFERENCE  (paste relevant code here)
+────────────────────────────────────────────────────────────────────────────────
+
+[Paste the relevant portion of the file(s). Do not paste the entire ClientPage.tsx
+unless the question spans the whole file — it's ~1800 lines. Instead, paste the
+specific function, state block, useEffect, or JSX section that is relevant.]
+
+Example of what to paste for a state/logic question:
+  -- Paste the specific useState declarations --
+  -- Paste the function that handles the action --
+  -- Paste the JSX that renders the UI for it --
+
+Example of what to paste for an API question:
+  -- Paste the full route handler (GET or POST) --
+  -- Paste the relevant SQL query results/types --
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION D: WHAT I WANT FROM YOU  (be explicit)
+────────────────────────────────────────────────────────────────────────────────
+
+Please:
+  [ ] Write the complete updated code for [FILE/FUNCTION]
+  [ ] Explain what is causing the problem before giving a solution
+  [ ] Give me only the changed lines with context (not the full file)
+  [ ] Give me the SQL migration script as well
+  [ ] Suggest the safest approach given the security constraints
+  [ ] Preserve all Hebrew strings exactly as they are
+  [ ] Keep Tailwind class names — do not switch to inline styles
+  [ ] Keep the existing component structure — do not split into new files
+      unless I specifically ask
+
+Output format I prefer:
+  [ ] Full file replacement
+  [ ] Diff-style (show old → new)
+  [ ] Just the function(s) that change
+  [ ] Step-by-step explanation first, then code
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION E: KNOWN CONSTRAINTS  (add any that apply)
+────────────────────────────────────────────────────────────────────────────────
+
+Environment:
+  [ ] This runs on Windows Server with IIS — no Linux-specific solutions
+  [ ] PowerShell is available on the server
+  [ ] ldapjs is installed but not yet used (it's in package.json)
+  [ ] The SQL Server instance name is SQLEXPRESS
+  [ ] We are on an internal network — no public internet from the server
+
+Code style:
+  [ ] Keep all comments in Hebrew where they already exist
+  [ ] Do not add new dependencies — use what's already in package.json
+  [ ] TypeScript strict mode is on — all types must be explicit
+  [ ] Tailwind 4 (not v3) — some class names differ
+
+Current state of the codebase:
+  [ ] AES key is still hardcoded — do not assume ENCRYPTION_KEY env var exists yet
+  [ ] Edit password is still plaintext in DB — do not assume bcrypt is set up
+  [ ] ldapjs is not yet wired up — PowerShell is still used for AD queries
+  [ ] dynamic_db.json still exists but is not the source of truth (SQL is)
+
+
+────────────────────────────────────────────────────────────────────────────────
+QUICK REFERENCE — COMMON PATTERNS IN THIS CODEBASE
+────────────────────────────────────────────────────────────────────────────────
+
+Fetching sections (client):
+  const res = await fetch(`/api/sections?${new URLSearchParams({
+    department: initialUser?.department || '',
+    username:   initialUser?.username   || '',
+    title:      initialUser?.title      || '',
+    groups:     JSON.stringify(initialUser?.groups || []),
+    editMode:   isEditMode ? 'true' : 'false'
+  })}`);
+
+Saving an item (client):
+  await fetch('/api/sections', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'update_item', sectionId, itemId, data, visibility })
+  });
+
+Getting the DB connection (server):
+  import { getConnection } from '@/lib/db';
+  import sql from 'mssql';
+  const pool = await getConnection();
+  const result = await pool.request()
+    .input('Id', sql.BigInt, id)
+    .query('SELECT * FROM Items WHERE Id = @Id');
+
+Visibility check pattern (server):
+  const allowedList = visibilityStr.toLowerCase().split(',').map(s => s.trim());
+  const hasAccess =
+    allowedList.includes(userDept) ||
+    allowedList.includes(userName) ||
+    allowedList.includes(userTitle) ||
+    userGroups.some(g => allowedList.includes(g));
+
+Color classes available for sections:
+  red | blue | green | purple | orange | teal | indigo | pink
+
+Field types available in section schema:
+  text | textarea | link | password | file | folder
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION F: NAVIGATE ME TO THE CODE  (always add this at the end of your request)
+────────────────────────────────────────────────────────────────────────────────
+
+After reading my request above, before writing any code:
+
+  1. Tell me exactly which file(s) I need to open.
+
+  2. Tell me which section of that file to look at, using this format:
+
+       File:      app/ClientPage.tsx
+       Section:   "ניהול מצב (STATE)" comment block
+       Look for:  the useState declaration for [X]
+       Approx:    top third of the file
+
+       File:      app/api/sections/route.ts
+       Section:   POST handler, inside the 'add_item' action branch
+       Look for:  the sql.Request() call that inserts into Items
+       Approx:    bottom half of the file
+
+  3. If the change touches more than one file, list them in the order
+     I should edit them (dependencies first).
+
+  4. If I need to create a new file, tell me exactly where to put it
+     and what to name it.
+
+  5. Then give me the code.
+
+─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+
+FILE MAP — sections inside ClientPage.tsx (use these names when navigating)
+
+  The file is divided by these Hebrew comment banners. Search for them exactly:
+
+  // ==================== ייבוא ספריות (IMPORTS) ====================
+      Top of file. All import statements.
+
+  // ==================== רכיבי עזר (HELPER COMPONENTS) ====================
+      SortableRow and SortableField components.
+
+  // ==================== הקומפוננטה הראשית (MAIN COMPONENT) ====================
+      Start of DynamicIPIDashboard function.
+
+  // ==================== הרשאות ובסיס (PERMISSIONS) ====================
+      authorizedAdmins array, isUserAdmin check, todayFormatted.
+
+  // ==================== ניהול מצב (STATE) ====================
+      All useState declarations grouped by category.
+
+  // ==================== רפרנסים וחיישנים (REFS & SENSORS) ====================
+      scrollContainerRef, dnd-kit sensors.
+
+  // ==================== אפקטים (USE EFFECTS) ====================
+      All useEffect hooks. fetchSections() is defined just after the first one.
+
+  // ==================== פונקציות: סכמות וקטגוריות ====================
+      addFieldToSchema, removeFieldFromSchema, handleSaveSection,
+      openEditSectionModal, handleDeleteSection.
+
+  // ==================== פונקציות: פריטים (מוצרים/נהלים) ====================
+      handleSaveItem, openEditItemModal, handleDeleteItem.
+
+  // ==================== פונקציות: ניהול קבצים ====================
+      handleFileSelect, handleRemoveFile.
+
+  // ==================== פונקציות: מערכת הודעות ====================
+      addSystemMessage, removeSystemMessage.
+
+  // ==================== פונקציות: ספר טלפונים ואקסל ====================
+      savePhonebookData, savePhonebookSchema, addColumn, removeColumn,
+      addPhonebookRow, deletePhonebookRow, updatePhonebookCell,
+      handleExcelUpload, downloadExcelTemplate.
+
+  // ==================== פונקציות: אבטחה והתחברות ====================
+      handleLogin, copyToClipboard, handlePasswordAction,
+      handleSecurityVerify.
+
+  // ==================== פונקציות: ימי הולדת ====================
+      getBirthdayCelebrants, birthdayCelebrants.
+
+  // ==================== פונקציות: DND (גרירה ושחרור) ====================
+      handleDragEnd, handlePhonebookDragEnd.
+
+  // ==================== פונקציות: עיצוב וערכות נושא ====================
+      getColorClasses, getCardGradientTheme, BirthdayTicker component.
+
+  // ==================== רינדור המסך (RENDER / JSX) ====================
+      The return() statement. All JSX from here to end of file.
+      Sub-sections inside the JSX (search for these):
+        {/* ==================== אזור כותרת עליונה (HEADER) ==================== */}
+        {/* ==================== תוכן מרכזי (MAIN CONTENT) ==================== */}
+        {/* --- אזור 1: הודעות מערכת רצות (System Messages) --- */}
+        {/* --- אזור 2: חיפוש כללי מתקדם (Search Bar) --- */}
+        {/* --- אזור 3: קטגוריות ומוצרים (Sections Loop) --- */}
+        {/* --- אזור 3.5: הוספת קטגוריה --- */}
+        {/* --- אזור 4: ספר טלפונים --- */}
+        {/* --- אזור 5: הגדרות מערכת --- */}
+        {/* ==================== חלונות קופצים (MODALS) ==================== */}
+        {/* --- מודל 1: צפייה בפרטי פריט --- */}
+        {/* --- מודל 2: בונה הקטגוריות --- */}
+        {/* --- מודל 3: טופס הוספת/עריכת פריט --- */}
+        {/* --- מודל 4: התחברות למצב אדמין --- */}
+        {/* --- מודל 5: בדיקת אבטחה לחשיפת סיסמאות --- */}
+
+─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+
+FILE MAP — sections inside app/api/sections/route.ts
+
+  // --- הגדרות הצפנה ---       ENCRYPTION_KEY, IV_LENGTH
+  // --- פונקציות עזר ---       encryptText, decryptText
+  //                            encryptAllData, decryptAllData
+  // --- ניהול קבצים ---        getData, saveData  (legacy JSON — ignore)
+  // --- API HANDLERS ---
+  //   export async function GET    visibility filtering logic
+  //   export async function POST   action switch:
+  //     'create_section'
+  //     'update_section'
+  //     'add_item'
+  //     'update_item'
+  //     'delete_section'
+  //     'delete_item'
+
+================================================================================
+END OF PROMPT TEMPLATE
+================================================================================

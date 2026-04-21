@@ -1,0 +1,793 @@
+================================================================================
+  IPI PORTAL — PROJECT MAP
+  Last updated: April 2026
+  Purpose: Architecture reference for developers working on this codebase.
+           Add this file to the project root and commit it alongside the code.
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+TABLE OF CONTENTS
+────────────────────────────────────────────────────────────────────────────────
+  1.  What This Is
+  2.  Tech Stack
+  3.  Folder & File Structure
+  4.  Layer-by-Layer Breakdown
+        4A. Browser / Client Layer
+        4B. Next.js Server Layer
+        4C. API Routes Layer
+        4D. Data Stores Layer
+  5.  Database Schema (SQL Server)
+  6.  Authentication & Authorization Flow
+  7.  Visibility / Permissions System
+  8.  Data Encryption
+  9.  Key State Variables (ClientPage.tsx)
+  10. Edit Mode Flow
+  11. Phonebook Flow
+  12. Holiday / Memorial Day Decorations
+  13. Known Issues & Security Risks (Priority Order)
+  14. Environment Variables Required
+  15. Deployment Notes
+
+
+────────────────────────────────────────────────────────────────────────────────
+1. WHAT THIS IS
+────────────────────────────────────────────────────────────────────────────────
+
+Internal enterprise portal for the IPI organization. A single-page app that
+serves as a centralized hub for:
+
+  - Browsing organizational knowledge cards (products, procedures, links)
+  - Role-based access control tied to Windows Active Directory (AD)
+  - A company phonebook with department filtering and Excel import/export
+  - System-wide announcements (scrolling ticker)
+  - Secure storage of credentials (usernames + encrypted passwords)
+  - Holiday and memorial day visual decorations (admin-toggled)
+
+There is one public route: GET /
+Everything else is API routes under /api/*.
+
+The entire UI lives in a single file: app/ClientPage.tsx
+
+
+────────────────────────────────────────────────────────────────────────────────
+2. TECH STACK
+────────────────────────────────────────────────────────────────────────────────
+
+  Runtime         Next.js 16 (App Router), React 19, TypeScript 5
+  Styling         Tailwind CSS 4
+  Animations      Framer Motion
+  Drag & Drop     @dnd-kit/core + @dnd-kit/sortable
+  Icons           Lucide React
+  Database        Microsoft SQL Server via `mssql` driver
+  Auth            NTLM (Windows Integrated Auth) decoded in lib/auth.ts
+  AD Enrichment   PowerShell → Get-ADUser (runs on the Next.js server)
+  Encryption      Node.js built-in `crypto` module, AES-256-CBC
+  Excel           xlsx library (client-side parse + generate)
+
+
+────────────────────────────────────────────────────────────────────────────────
+3. FOLDER & FILE STRUCTURE
+────────────────────────────────────────────────────────────────────────────────
+
+  /
+  ├── app/
+  │   ├── page.tsx                    Server component. Entry point. Fetches user
+  │   │                               via getCurrentUser() and passes as prop.
+  │   │
+  │   ├── ClientPage.tsx              THE ENTIRE UI. Client component (~1800 lines).
+  │   │                               All state, all modals, all logic lives here.
+  │   │
+  │   ├── layout.tsx                  Root layout. Loads Hebrew/Latin font (Assistant).
+  │   │                               Also calls getCurrentUser() for logging.
+  │   │
+  │   ├── globals.css                 Tailwind base import + CSS custom properties.
+  │   │
+  │   └── api/
+  │       ├── auth/
+  │       │   └── route.ts            POST. Checks username in AuthorizedUsers table,
+  │       │                           then validates password vs GlobalSettings.
+  │       │
+  │       ├── sections/
+  │       │   └── route.ts            GET + POST. Main data CRUD. Handles:
+  │       │                             - create/update/delete sections (categories)
+  │       │                             - create/update/delete items (cards)
+  │       │                             - server-side visibility filtering on GET
+  │       │                             - AES-256 encrypt/decrypt on password fields
+  │       │
+  │       ├── phonebook/
+  │       │   └── route.ts            GET + POST. Contact directory.
+  │       │                           Two SQL rows: one for schema, one for data blob.
+  │       │
+  │       ├── messages/
+  │       │   └── route.ts            GET + POST. System announcements ticker.
+  │       │                           Backed by SystemMessages SQL table.
+  │       │
+  │       ├── user/
+  │       │   └── route.ts            GET. Two modes:
+  │       │                             ?search=X  → AD lookup (existence check)
+  │       │                             (no param)  → returns current logged-in user
+  │       │
+  │       ├── settings/
+  │       │   └── route.ts            GET + POST. Holiday decoration toggles.
+  │       │                           Reads/writes holiday-settings.json (NOT SQL).
+  │       │
+  │       └── verify-password/
+  │           └── route.ts            POST. Checks a raw password string against
+  │                                   GlobalSettings.EditPassword. Legacy endpoint.
+  │
+  ├── lib/
+  │   ├── auth.ts                     NTLM header decoder. AD enrichment via
+  │   │                               PowerShell. In-memory user cache (60min TTL).
+  │   │                               IP-to-username fallback cache.
+  │   │
+  │   └── db.ts                       MSSQL connection pool singleton.
+  │                                   Reads DB_USER, DB_PASSWORD, DB_NAME,
+  │                                   DB_SERVER, DB_INSTANCE from env (with hardcoded
+  │                                   fallbacks — see security issues).
+  │
+  ├── components/
+  │   ├── IndependenceDayDecor.tsx    Renders a bunting of Israeli flags across the
+  │   │                               top of the page. Toggled by admin.
+  │   │
+  │   └── MemorialDayBanner.tsx       Fixed black top bar with candle animation.
+  │                                   Supports two modes: 'holocaust' | 'idf'.
+  │
+  ├── public/
+  │   ├── logo-red.png                IPI logo (default state)
+  │   └── logo-blue.png               IPI logo (hover state)
+  │
+  ├── holiday-settings.json           Persists holiday decoration state between
+  │                                   server restarts. Written by /api/settings.
+  │
+  ├── dynamic_db.json                 LEGACY. Was the original flat-file database
+  │                                   before SQL migration. May contain stale data.
+  │                                   Do not use as source of truth. Safe to delete
+  │                                   once SQL is confirmed as the only source.
+  │
+  ├── package.json
+  └── tsconfig.json
+
+
+────────────────────────────────────────────────────────────────────────────────
+4A. BROWSER / CLIENT LAYER
+────────────────────────────────────────────────────────────────────────────────
+
+Entry: app/ClientPage.tsx (default export: DynamicIPIDashboard)
+Props: { initialUser } — passed from page.tsx (server-fetched)
+
+This is a large single component. Key internal sub-components:
+
+  SortableRow         Table row in the phonebook that supports dnd-kit drag.
+  SortableField       Schema field row in the section builder modal.
+  BirthdayTicker      Side panel showing employees with birthdays this month.
+                      Reads from phonebookData state, not from an API call.
+
+Major state groups:
+
+  See section 9 (Key State Variables) for the full breakdown.
+
+What this component does NOT do:
+  - It does not enforce permissions — that is the server's job (/api/sections GET).
+  - It does not encrypt passwords — that happens in /api/sections POST.
+  - It does not read AD directly — lib/auth.ts handles that.
+
+How data flows in:
+  1. page.tsx fetches user server-side → passes as initialUser prop
+  2. useEffect on mount calls fetchSections() → GET /api/sections?department=...
+  3. useEffect on mount calls /api/phonebook → sets phonebookData
+  4. useEffect on mount calls /api/messages → sets systemMessages
+
+
+────────────────────────────────────────────────────────────────────────────────
+4B. NEXT.JS SERVER LAYER
+────────────────────────────────────────────────────────────────────────────────
+
+app/page.tsx
+  - Marked `export const dynamic = 'force-dynamic'` so it never caches.
+  - Calls getCurrentUser() from lib/auth.ts.
+  - Renders <DynamicIPIDashboard initialUser={user} />.
+
+app/layout.tsx
+  - Loads Assistant font (Google Fonts, Hebrew + Latin subsets).
+  - Also calls getCurrentUser() independently (for server-side logging).
+  - Note: getCurrentUser() is called TWICE per request (page + layout).
+    This is harmless due to the in-memory cache, but worth knowing.
+
+lib/auth.ts — getCurrentUser()
+  - Reads the `Authorization` request header.
+  - If it starts with "NTLM ", calls decodeNTLM() to extract username.
+  - Falls back to IP-to-username cache if no NTLM header present.
+  - Falls back to guest user { username: 'אורח', department: 'כללי' }.
+  - If username found, runs PowerShell Get-ADUser against two AD servers
+    (192.168.1.243, then 192.168.1.244 as fallback).
+  - Parses MemberOf DN strings into plain group name strings.
+  - Caches the full user object for 60 minutes (in-memory Map).
+  - Also does a reverse DNS lookup (dns.reverse) to get computer name.
+
+lib/db.ts — getConnection()
+  - Returns a singleton mssql.ConnectionPool.
+  - Connection config reads from env vars with hardcoded fallbacks:
+      DB_USER     (fallback: 'sa')
+      DB_PASSWORD (fallback: '123456')      ← SECURITY RISK
+      DB_NAME     (fallback: 'ProductHub_TEST')
+      DB_SERVER   (fallback: 'localhost')
+      DB_INSTANCE (fallback: 'SQLEXPRESS')
+
+
+────────────────────────────────────────────────────────────────────────────────
+4C. API ROUTES LAYER
+────────────────────────────────────────────────────────────────────────────────
+
+/api/sections  (GET + POST)
+  ─────────────────────────
+  GET parameters:
+    department  string   User's AD department
+    username    string   User's AD sAMAccountName
+    title       string   User's AD job title
+    groups      string   JSON array of AD group names the user belongs to
+    editMode    string   'true' if admin is in edit mode (bypasses filtering)
+
+  GET behavior:
+    - Queries Sections and Items tables.
+    - For each item, checks its `visibility` field.
+    - If visibility = 'הכל' (or empty), item is visible to everyone.
+    - Otherwise, splits visibility by comma and checks if the user's
+      department, username, title, or any AD group is in the allow-list.
+    - Items that don't pass are stripped from the response entirely
+      (they are never sent to the browser).
+    - Decrypts password fields before sending to client.
+
+  POST actions (body.action):
+    create_section  Creates a new row in Sections. Auto-assigns color from
+                    AUTO_COLORS array based on current count.
+    update_section  Updates Title and SchemaDef for a section.
+    delete_section  Deletes a section by Id.
+    add_item        Inserts a new row in Items with Data JSON + visibility.
+    update_item     Updates Data JSON + visibility for an existing item.
+    delete_item     Deletes an item by Id.
+
+  Encryption:
+    - encryptText(text) uses AES-256-CBC with a hardcoded 32-char key.  ← RISK
+    - encryptAllData() walks sections before saving; only encrypts the
+      `password` field inside objects typed as 'password' in the schema.
+    - decryptAllData() is called on GET before returning to client.
+
+/api/phonebook  (GET + POST)
+  ────────────────────────────
+  GET:
+    Returns { schema: [...], data: [...] }
+    Schema is stored as JSON in PhonebookConfig (Id=1, SchemaDef column).
+    Data is stored as a single large JSON blob in PhonebookData (Id=1, Content column).
+
+  POST body:
+    { type: 'schema', payload: [...] }   → UPDATE PhonebookConfig
+    { type: 'data',   payload: [...] }   → UPDATE PhonebookData
+
+/api/auth  (POST)
+  ─────────────────
+  Body: { username, password }
+  Step 1: Checks AuthorizedUsers table for the username.
+  Step 2: If found, checks GlobalSettings where SettingKey='EditPassword'.
+  Returns: { isAuthorized: true } or { isAuthorized: false, message: '...' }
+  Always returns HTTP 200 (even on failure) to prevent browser auth dialogs.
+
+/api/user  (GET)
+  ────────────────
+  ?search=X:
+    Runs PowerShell Get-ADObject to check if X exists as a user or group in AD.
+    Returns { exists: true } or { exists: false }.
+    Used when an admin types a username/title into the item visibility field.
+
+  No params:
+    Calls getCurrentUser() and returns the current user object.
+
+/api/messages  (GET + POST)
+  ──────────────────────────
+  GET: SELECT * FROM SystemMessages → returns { data: [...] }
+  POST actions:
+    add     INSERT a message row (id, text, date)
+    delete  DELETE a message by id
+
+/api/settings  (GET + POST)
+  ──────────────────────────
+  Reads/writes holiday-settings.json on disk (NOT SQL Server).
+  File location: process.cwd() + '/holiday-settings.json'
+  GET:  Returns { showHolidayDecor: bool, memorialDayType: null|'holocaust'|'idf' }
+  POST: Writes the full settings object to the JSON file.
+  Note: This state is currently managed only in ClientPage React state and
+        is NOT loaded from the API on page load. The JSON file persists across
+        server restarts but the UI resets on every browser reload.
+
+/api/verify-password  (POST)
+  ───────────────────────────
+  Legacy endpoint. Checks a raw password against GlobalSettings.EditPassword.
+  Superseded by /api/auth. May be removable.
+
+
+────────────────────────────────────────────────────────────────────────────────
+4D. DATA STORES LAYER
+────────────────────────────────────────────────────────────────────────────────
+
+SQL Server (primary store)
+  Server:    192.168.x.x (configured via env or db.ts fallback)
+  Instance:  SQLEXPRESS
+  Database:  ProductHub_TEST
+
+  See section 5 for full table definitions.
+
+holiday-settings.json (flat file)
+  Written by /api/settings POST. Read by /api/settings GET.
+  Stores: { showHolidayDecor: bool, memorialDayType: string|null }
+  Risk: Not atomic. Concurrent writes could corrupt the file.
+
+dynamic_db.json (legacy flat file — DO NOT USE)
+  Was the original database before SQL migration.
+  Still present in the repo. Can desync from SQL silently.
+  Safe to delete once SQL is confirmed as the sole source of truth.
+  If it exists and differs from SQL, the SQL data takes precedence
+  because all API routes now use getConnection(), not this file.
+
+Active Directory (read-only external dependency)
+  Queried via PowerShell child processes from lib/auth.ts and /api/user.
+  AD servers: 192.168.1.243 (primary), 192.168.1.244 (fallback).
+  Data fetched per user: Name, Department, Title, MemberOf.
+  Cached in memory for 60 minutes.
+
+
+────────────────────────────────────────────────────────────────────────────────
+5. DATABASE SCHEMA (SQL Server)
+────────────────────────────────────────────────────────────────────────────────
+
+Table: Sections
+  Id          BIGINT PRIMARY KEY
+  Title       NVARCHAR
+  Color       NVARCHAR    One of: red blue green purple orange teal indigo pink
+  SchemaDef   NVARCHAR    JSON array of field definitions:
+                            [{ key, label, type }]
+                          Types: text | textarea | link | password | file | folder
+
+Table: Items
+  Id          BIGINT PRIMARY KEY
+  SectionId   BIGINT      FK → Sections.Id
+  Data        NVARCHAR    JSON object keyed by field keys from SchemaDef.
+                          Password fields store: { username, password (encrypted) }
+                          File fields store: [{ name, content (base64 dataURL) }]
+  visibility  NVARCHAR    Comma-separated allow-list. 'הכל' = public.
+                          Values can be: department names, usernames,
+                          job titles, or AD group names.
+
+Table: SystemMessages
+  id          VARCHAR PRIMARY KEY   (timestamp string, e.g. "1748294729381")
+  text        NVARCHAR
+  date        VARCHAR               DD/MM/YYYY format
+
+Table: PhonebookConfig
+  Id          INT PRIMARY KEY       Always row Id=1
+  SchemaDef   NVARCHAR(MAX)         JSON array of column definitions:
+                                      [{ key, label, width? }]
+
+Table: PhonebookData
+  Id          INT PRIMARY KEY       Always row Id=1
+  Content     NVARCHAR(MAX)         JSON array of employee rows.
+                                    Each row has one key per schema column.
+
+Table: AuthorizedUsers
+  Username    NVARCHAR PRIMARY KEY  AD sAMAccountName (lowercase)
+                                    Currently: itayc, gal, michaelg
+
+Table: GlobalSettings
+  SettingKey    NVARCHAR PRIMARY KEY
+  SettingValue  NVARCHAR
+  Current rows:
+    EditPassword → the plaintext admin password          ← SECURITY RISK
+
+
+────────────────────────────────────────────────────────────────────────────────
+6. AUTHENTICATION & AUTHORIZATION FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+Step 1: NTLM identity resolution (on every server-side render)
+  - IIS or reverse proxy forwards the NTLM Authorization header to Next.js.
+  - lib/auth.ts decodeNTLM() decodes the base64 token to extract username.
+  - If no header: falls back to IP-to-username cache, then guest.
+  - Username is used as the key for all downstream lookups.
+
+Step 2: AD enrichment (cached per username, 60-min TTL)
+  - PowerShell: Get-ADUser -Identity <username> -Properties Name,Department,Title,MemberOf
+  - Returns: displayName, department, title, groups (array of CN names)
+  - Result is stored in userCache Map.
+
+Step 3: User object shape
+  {
+    username:    string   (sAMAccountName, e.g. "itayc")
+    displayName: string   (AD Name, e.g. "Itay Cohen")
+    department:  string   (AD Department, e.g. "IT")
+    title:       string   (AD Title, e.g. "System Administrator")
+    groups:      string[] (AD group CN names, e.g. ["IT_Admins", "Portal_Editors"])
+    ipAddress:   string
+    computerName:string   (from reverse DNS)
+  }
+
+Step 4: Edit mode (admin gate)
+  - isUserAdmin check on the client: looks at authorizedAdmins array hardcoded
+    in ClientPage.tsx. This controls whether the lock button is shown.       ← RISK
+  - When admin clicks the lock button: POST /api/auth with username+password.
+  - Server checks AuthorizedUsers table, then GlobalSettings.EditPassword.
+  - On success: isEditMode state = true in the browser. No session/cookie set.
+  - Edit mode is browser-state only. Refreshing the page exits edit mode.
+  - No server-side enforcement of edit mode — any POST to /api/sections works
+    regardless of whether the caller is authenticated.                        ← RISK
+
+
+────────────────────────────────────────────────────────────────────────────────
+7. VISIBILITY / PERMISSIONS SYSTEM
+────────────────────────────────────────────────────────────────────────────────
+
+Each item (card) has a `visibility` field stored in SQL.
+
+Values:
+  'הכל'              Visible to everyone (default)
+  'IT,HR'            Visible only to users in the IT or HR departments
+  'itayc'            Visible only to the user with username 'itayc'
+  'מנהל מוצר'        Visible only to users with that job title
+  'IT_Admins'        Visible only to users in the IT_Admins AD group
+
+Matching logic (server-side, in /api/sections GET):
+  The server checks if the user's department, username, title, or ANY of
+  their AD groups appears in the comma-split visibility list.
+  Case-insensitive comparison (everything is lowercased before comparison).
+
+Client-side (secondary, for UX only):
+  ClientPage.tsx has a parallel filter that mirrors the server logic.
+  This is for instant UI updates when toggling edit mode.
+  Server-side filtering is the authoritative gate.
+
+Admin override:
+  If editMode=true is passed in the GET query params, all items are returned.
+  There is no server-side auth check on this parameter.                       ← RISK
+
+Adding visibility to an item:
+  - Admin opens the item modal.
+  - Checks department checkboxes (populated from live phonebook data).
+  - Or types a username/title, which triggers GET /api/user?search=X to
+    verify the value exists in AD before adding it as a tag.
+
+
+────────────────────────────────────────────────────────────────────────────────
+8. DATA ENCRYPTION
+────────────────────────────────────────────────────────────────────────────────
+
+Algorithm:  AES-256-CBC
+Key:        32-character string hardcoded in app/api/sections/route.ts    ← RISK
+IV:         16 random bytes, generated fresh per encryption, prepended to
+            the ciphertext as hex (format: "ivHex:cipherHex")
+
+What is encrypted:
+  Only the `password` sub-field of fields typed as 'password' in the schema.
+  The `username` sub-field is stored in plaintext.
+
+Encryption happens:
+  - On POST (add_item / update_item): before writing Data JSON to SQL.
+
+Decryption happens:
+  - On GET (sections): after reading from SQL, before sending to browser.
+
+Password field storage format in SQL (Data column):
+  {
+    "f_1234567890": {
+      "username": "admin",
+      "password": "aabbccdd...:eeff0011..."   ← encrypted
+    }
+  }
+
+Security model gap:
+  The decrypted password is sent to the browser in the GET response.
+  It is displayed masked (••••••) in the UI but is present in the JS heap.
+  Revealing it requires a secondary PIN (hardcoded as '123456' in client). ← RISK
+
+
+────────────────────────────────────────────────────────────────────────────────
+9. KEY STATE VARIABLES (ClientPage.tsx)
+────────────────────────────────────────────────────────────────────────────────
+
+System
+  sections              any[]     All categories + their items (from /api/sections)
+  searchTerm            string    Global search filter
+  isEditMode            boolean   True when admin is in edit mode
+  showLoginModal        boolean   Controls the admin login modal
+  loginCredentials      object    { username, password } — form state only
+
+Section builder
+  showCreateSectionModal boolean
+  newSectionTitle        string
+  newSectionFields       array    Schema fields being built/edited
+  editingSectionId       number|null   null = create, number = edit
+
+Item form
+  showAddItemModal       boolean
+  targetSection          any      Which section we're adding/editing in
+  newItemData            object   Key-value map of field values
+  editingItemId          number|null
+  newItemVisibility      string[] Array of allowed dept/user/group values
+
+View modal
+  viewItem               { item, section } | null
+
+System messages
+  systemMessages         array    [{ id, text, date }]
+  currentMsgIndex        number   Which message is currently displayed
+  newMsgText             string   Input for adding a new message
+  isHovered              boolean  Pauses the auto-rotate timer
+
+Phonebook
+  phonebookData          any[]    Live saved data (source of truth)
+  draftPhonebook         any[]    Working copy while in edit mode
+  isPhonebookEditMode    boolean
+  selectedDept           string   Active department tab filter
+  phonebookSchema        array    Column definitions
+
+Security / passwords
+  copiedField            string|null   Which field was just copied (for check icon)
+  visiblePasswords       Record        fieldKey → boolean
+  showSecurityModal      boolean
+  securityInput          string        PIN entry
+  pendingAction          object|null   { type, key, value } — deferred until PIN ok
+  unlockedPasswords      Record        fieldKey → secondsRemaining (countdown)
+
+Holiday decorations
+  showHolidayDecor       boolean   Independence Day bunting flag
+  memorialDayType        MemorialType  null | 'holocaust' | 'idf'
+
+
+────────────────────────────────────────────────────────────────────────────────
+10. EDIT MODE FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+Entering edit mode:
+  1. Admin clicks the lock button (only visible if isUserAdmin = true).
+  2. Login modal appears → admin enters AD username + admin password.
+  3. POST /api/auth → server checks AuthorizedUsers + GlobalSettings.
+  4. On success: isEditMode = true, isPhonebookEditMode = true.
+     phonebookData is copied into draftPhonebook.
+  5. fetchSections() is called again with editMode=true (all items returned).
+
+While in edit mode:
+  - Section titles gain edit/delete buttons.
+  - Cards gain edit/delete buttons on hover.
+  - "Add to [section]" placeholder cards appear.
+  - "Create new category" button appears below all sections.
+  - A system messages management panel appears.
+  - Phonebook becomes editable (cells are inputs, rows are draggable).
+  - Holiday settings panel appears at the bottom.
+
+Saving phonebook changes:
+  - Admin clicks "Save changes" in the phonebook header.
+  - draftPhonebook → phonebookData state + POST /api/phonebook.
+
+Exiting edit mode:
+  - Admin clicks the "Edit active" button.
+  - isEditMode = false, isPhonebookEditMode = false.
+  - fetchSections() is called again without editMode=true.
+
+
+────────────────────────────────────────────────────────────────────────────────
+11. PHONEBOOK FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+Data model:
+  phonebookSchema   Columns (key, label, optional width). Default 7 columns:
+                    name, department, role, phone, email, ext, birthday.
+  phonebookData     Array of row objects. Each row has one key per schema column
+                    plus a unique `id` field (timestamp string).
+
+Birthday detection:
+  getBirthdayCelebrants() filters phonebookData for rows where the birthday
+  month matches the current month. Days are compared for "today" highlighting.
+  Date format expected: DD.MM.YYYY or DD/MM/YYYY.
+
+Department tabs:
+  Derived live from phonebookData by extracting unique department values.
+  The user's own department is auto-selected on load (if it exists in the data).
+  During edit mode or search, the tab is forced to "הכל" (All).
+
+Excel import:
+  Client-side parse using xlsx library.
+  Column matching is fuzzy: looks for Hebrew or English header variants.
+  Rows are validated: name must have ≥2 non-numeric characters.
+  On import: draftPhonebook is updated immediately (instant UI refresh),
+  then savePhonebookData() posts the new data to SQL.
+
+Excel template download:
+  Generates a one-row example XLSX using xlsx library, client-side.
+  Filename: Phonebook_Template_V1.8.xlsx
+
+
+────────────────────────────────────────────────────────────────────────────────
+12. HOLIDAY / MEMORIAL DAY DECORATIONS
+────────────────────────────────────────────────────────────────────────────────
+
+Independence Day (יום העצמאות):
+  Component:  components/IndependenceDayDecor.tsx
+  Controlled: showHolidayDecor state in ClientPage.tsx
+  Renders:    22 SVG Israeli flags on a bunting cord across the top of the header.
+              Each flag has a CSS wind animation with a staggered delay.
+              The header gets a CSS margin-top to avoid overlap.
+
+Memorial Day (ימי זיכרון):
+  Component:  components/MemorialDayBanner.tsx
+  Controlled: memorialDayType state ('holocaust' | 'idf' | null)
+  Renders:    Fixed black bar at the top of the viewport with candle animations.
+              Uses position:fixed + body padding-top to push content down.
+  Modes:
+    'holocaust'  → "יום הזיכרון לשואה ולגבורה"
+    'idf'        → "יום הזיכרון לחללי מערכות ישראל"
+
+Persistence:
+  These states live only in ClientPage.tsx React state.
+  They are NOT loaded from /api/settings on page load.
+  holiday-settings.json is written when the admin changes the setting,
+  but is not read back by the client on mount. To make them persist across
+  browser reloads, add a useEffect that fetches /api/settings on mount.    ← TODO
+
+
+────────────────────────────────────────────────────────────────────────────────
+13. KNOWN ISSUES & SECURITY RISKS (PRIORITY ORDER)
+────────────────────────────────────────────────────────────────────────────────
+
+  PRIORITY 1 — Critical security vulnerabilities
+
+  [SEC-1] AES encryption key is hardcoded in source code
+    File:    app/api/sections/route.ts
+    Line:    const ENCRYPTION_KEY = '12345678901234567890123456789012';
+    Fix:     Move to ENCRYPTION_KEY environment variable.
+             Rotate all existing encrypted passwords in the DB after migration.
+
+  [SEC-2] Admin password stored in plaintext in SQL
+    Table:   GlobalSettings, SettingKey='EditPassword'
+    Fix:     Hash with bcrypt. Update /api/auth to use bcrypt.compare().
+             Update /api/verify-password as well.
+
+  [SEC-3] PowerShell command injection risk in /api/user
+    File:    app/api/user/route.ts
+    Issue:   searchTerm from the URL is interpolated directly into a PS string.
+             A crafted input like  '; Remove-Item -Recurse C:\  could be dangerous.
+    Fix:     Validate input with a strict regex (alphanumeric + basic AD chars only)
+             before building the PS command. Long term: switch to ldapjs
+             (already in package.json as a dependency) to avoid shell injection entirely.
+
+  [SEC-4] DB credentials have hardcoded fallbacks
+    File:    lib/db.ts
+    Issue:   Defaults to user='sa', password='123456' if env vars are not set.
+    Fix:     Remove fallbacks. Throw on missing env vars. Set all vars in production.
+
+  [SEC-5] PIN for revealing passwords is hardcoded on the client
+    File:    app/ClientPage.tsx, handleSecurityVerify()
+    Line:    if (securityInput === '123456')
+    Fix:     Move PIN verification to a server endpoint. Never trust the client.
+
+  PRIORITY 2 — Authorization gaps
+
+  [SEC-6] Admin list is hardcoded in the frontend
+    File:    app/ClientPage.tsx
+    Line:    const authorizedAdmins = ['itayc', 'gal', 'michaelg']
+    Fix:     Remove this array. The lock button can be shown to everyone —
+             the actual gate is the /api/auth check. Or read from an env var.
+
+  [SEC-7] NODE_ENV=development bypasses the admin check
+    File:    app/ClientPage.tsx
+    Line:    const isUserAdmin = process.env.NODE_ENV === 'development' ? true : ...
+    Fix:     Remove this bypass. Use a dev admin account in .env.local instead.
+
+  [SEC-8] editMode URL parameter has no server-side auth
+    File:    app/api/sections/route.ts
+    Issue:   Any client can pass editMode=true in the GET query and receive
+             all items regardless of visibility. There is no token/session check.
+    Fix:     Remove editMode from GET params. In edit mode, fetch all items
+             with a separate authenticated endpoint (POST with a session token).
+
+  [SEC-9] No server-side enforcement of write operations
+    Issue:   POST /api/sections (create/update/delete) has no auth check.
+             Any user on the network can modify data by calling the API directly.
+    Fix:     Add middleware that verifies a session token before allowing writes.
+
+  PRIORITY 3 — Reliability and correctness
+
+  [REL-1] No CSRF protection on any POST endpoint
+    Fix:     Add CSRF tokens. Next.js 16 provides some built-in protection
+             for same-site requests, but explicit tokens are safer.
+
+  [REL-2] No rate limiting on auth or search endpoints
+    Fix:     Add rate limiting middleware on /api/auth and /api/user.
+
+  [REL-3] No input validation / schema enforcement on POST bodies
+    Fix:     Add Zod schemas to validate request bodies in all POST handlers.
+
+  [REL-4] Global user cache has no size limit or cleanup
+    File:    lib/auth.ts, userCache Map
+    Issue:   Cache grows indefinitely. In a large org, this leaks memory.
+    Fix:     Add a max-size eviction policy or use a TTL-aware cache library.
+
+  [REL-5] dynamic_db.json can desync from SQL silently
+    Issue:   The file still exists and contains old data. A future developer
+             might accidentally read from it.
+    Fix:     Delete the file and remove all references to it.
+
+  [REL-6] getCurrentUser() is called twice per server render
+    Files:   app/page.tsx and app/layout.tsx both call getCurrentUser().
+    Fix:     Call it only in page.tsx and pass the result as a prop to layout,
+             or use a request-scoped cache (React cache() API).
+
+  [REL-7] Holiday decoration state not loaded from server on mount
+    Issue:   showHolidayDecor and memorialDayType reset to defaults on every
+             browser reload. The API endpoint exists but is never called on mount.
+    Fix:     Add a useEffect in ClientPage.tsx to fetch /api/settings on mount
+             and initialize showHolidayDecor + memorialDayType from the response.
+
+
+────────────────────────────────────────────────────────────────────────────────
+14. ENVIRONMENT VARIABLES REQUIRED
+────────────────────────────────────────────────────────────────────────────────
+
+  Create a .env.local file in the project root (never commit this):
+
+  # SQL Server connection
+  DB_SERVER=192.168.x.x
+  DB_INSTANCE=SQLEXPRESS
+  DB_NAME=ProductHub_TEST
+  DB_USER=portalapp                  # Use a least-privilege SQL account, not sa
+  DB_PASSWORD=<strong-password>
+
+  # AES encryption (must be exactly 32 ASCII characters)
+  ENCRYPTION_KEY=<32-char-random-string>
+
+  # (Future) bcrypt-hashed admin password
+  # EDIT_PASSWORD_HASH=<bcrypt-hash>
+
+
+────────────────────────────────────────────────────────────────────────────────
+15. DEPLOYMENT NOTES
+────────────────────────────────────────────────────────────────────────────────
+
+Server requirements:
+  - Windows Server (NTLM auth requires Windows + IIS or a compatible proxy)
+  - Node.js 18+
+  - SQL Server (Express edition is fine)
+  - PowerShell available in PATH (for AD queries)
+  - Network access to AD servers 192.168.1.243 and 192.168.1.244
+
+Process management:
+  The project uses PM2. Start with: pm2 start npm --name "ipi-portal" -- start
+  Logs: pm2 logs ipi-portal
+
+IIS configuration:
+  - Windows Authentication must be enabled on the IIS site.
+  - Anonymous Authentication should be disabled (or set as fallback).
+  - URL Rewrite rules should proxy requests to Next.js on localhost:3000.
+  - The IIS app pool must run as an AD account with read access to AD.
+
+Build:
+  npm run build
+  npm start     (or let PM2 manage this)
+
+Known startup behavior:
+  - The MSSQL pool connects lazily on the first API call, not on startup.
+  - If the DB is unreachable, the first API call will throw and return 500.
+  - The user cache starts empty on each server restart.
+  - holiday-settings.json is read from disk by /api/settings GET.
+    If the file is missing, settings default to { showHolidayDecor: false, memorialDayType: null }.
+
+Files that must exist on the server (not in .gitignore):
+  - holiday-settings.json     (can be an empty {} — will be created on first POST)
+  - public/logo-red.png
+  - public/logo-blue.png
+
+Files that should NOT be committed:
+  - .env.local
+  - dynamic_db.json           (legacy — delete it)
+  - .next/                    (build output)
+
+
+================================================================================
+END OF PROJECT MAP
+================================================================================

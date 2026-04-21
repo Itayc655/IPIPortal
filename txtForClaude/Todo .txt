@@ -1,0 +1,305 @@
+================================================================================
+  IPI PORTAL — TO DO LIST
+  Generated: April 2026
+  Grouped by priority and effort. Check off items as you complete them.
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+PHASE 1 — CRITICAL SECURITY  (do these before any public/org-wide rollout)
+────────────────────────────────────────────────────────────────────────────────
+
+  [ ] SEC-1  Move AES encryption key to environment variable
+              File:   app/api/sections/route.ts
+              Action: Replace hardcoded ENCRYPTION_KEY string with
+                      process.env.ENCRYPTION_KEY
+                      Add ENCRYPTION_KEY to .env.local (32 random chars)
+                      After deploying: re-save all password items so they
+                      re-encrypt with the new key.
+              Effort: ~30 minutes
+
+  [ ] SEC-4  Remove hardcoded DB credential fallbacks
+              File:   lib/db.ts
+              Action: Remove fallback values for DB_USER, DB_PASSWORD, DB_NAME,
+                      DB_SERVER, DB_INSTANCE. Throw a clear error if any are missing.
+                      Add all five to .env.local with production values.
+                      Use a least-privilege SQL account (not 'sa').
+              Effort: ~20 minutes
+
+  [ ] SEC-5  Move the password-reveal PIN check to the server
+              File:   app/ClientPage.tsx (handleSecurityVerify)
+                      + create app/api/verify-pin/route.ts
+              Action: Remove `if (securityInput === '123456')` from the client.
+                      Create a POST endpoint that validates the PIN server-side.
+                      Store the PIN in GlobalSettings or as an env var.
+              Effort: ~1 hour
+
+  [ ] SEC-2  Hash the admin edit password with bcrypt
+              File:   app/api/auth/route.ts, app/api/verify-password/route.ts
+              Action: npm install bcryptjs @types/bcryptjs
+                      Update /api/auth to use bcrypt.compare() instead of
+                      plain string equality.
+                      Run a one-time script to hash the existing plaintext
+                      password in GlobalSettings.
+              Effort: ~1.5 hours
+
+  [ ] SEC-3  Fix PowerShell command injection in /api/user
+              File:   app/api/user/route.ts
+              Action: Add strict input validation before building the PS command:
+                        const safe = /^[a-zA-Z0-9_\-\.@\u0590-\u05FF ]+$/.test(searchTerm)
+                      Long term: replace the PowerShell call with ldapjs
+                      (already installed — see package.json).
+              Effort: 15 min (validation) / 3–4 hours (full ldapjs migration)
+
+
+────────────────────────────────────────────────────────────────────────────────
+PHASE 2 — AUTHORIZATION GAPS  (do these to properly enforce access control)
+────────────────────────────────────────────────────────────────────────────────
+
+  [ ] SEC-6  Remove hardcoded admin list from the frontend
+              File:   app/ClientPage.tsx
+              Action: Delete the authorizedAdmins array and the isUserAdmin logic
+                      that depends on it. Move the check to the server:
+                      /api/auth should return { isAdmin: true } after login,
+                      and that flag should control whether the lock button shows.
+              Effort: ~1 hour
+
+  [ ] SEC-7  Remove the NODE_ENV=development admin bypass
+              File:   app/ClientPage.tsx
+              Action: Delete the ternary:
+                        process.env.NODE_ENV === 'development' ? true : ...
+                      Use a local .env.local with a dev admin account instead.
+              Effort: ~10 minutes
+
+  [ ] SEC-8  Protect the editMode query parameter on /api/sections GET
+              File:   app/api/sections/route.ts
+              Action: Remove editMode from the GET query params entirely.
+                      Instead, create a separate authenticated endpoint (or add
+                      a session token check) for admin data fetching.
+                      Simplest approach: issue a short-lived signed token on
+                      successful /api/auth and require it as a header on writes.
+              Effort: ~3 hours
+
+  [ ] SEC-9  Add server-side auth enforcement on all write operations
+              File:   app/api/sections/route.ts (POST handler)
+              Action: Verify a session token or admin credential before allowing
+                      create/update/delete actions. Without this, any user on
+                      the network can POST directly to the API.
+              Effort: ~2 hours (depends on chosen session strategy)
+
+
+────────────────────────────────────────────────────────────────────────────────
+PHASE 3 — RELIABILITY & CODE QUALITY
+────────────────────────────────────────────────────────────────────────────────
+
+  [ ] REL-7  Load holiday settings on page mount
+              File:   app/ClientPage.tsx
+              Action: Add a useEffect that calls GET /api/settings on mount and
+                      sets showHolidayDecor + memorialDayType from the response.
+                      Currently these states reset on every browser reload.
+              Effort: ~20 minutes
+
+  [ ] REL-5  Delete dynamic_db.json and remove all references to it
+              Files:  dynamic_db.json, app/api/sections/route.ts (search for
+                      dataFilePath, getData, saveData references)
+              Action: Confirm SQL is the only source of truth. Delete the file.
+                      Remove getData(), saveData(), encryptAllData(),
+                      decryptAllData() if they are only used for the JSON file
+                      (they may have been superseded by SQL equivalents).
+              Effort: ~30 minutes
+
+  [ ] REL-3  Add input validation with Zod on all POST endpoints
+              Files:  app/api/sections/route.ts, app/api/auth/route.ts,
+                      app/api/messages/route.ts, app/api/phonebook/route.ts
+              Action: npm install zod
+                      Define schemas for each request body and parse before use.
+                      Return 400 with a clear message on validation failure.
+              Effort: ~2 hours
+
+  [ ] REL-1  Add CSRF protection to POST endpoints
+              Action: Research Next.js 16 CSRF handling (built-in same-origin
+                      checks may be sufficient). Add explicit CSRF tokens if
+                      the portal is accessible from outside the org network.
+              Effort: ~1 hour
+
+  [ ] REL-2  Add rate limiting on /api/auth and /api/user
+              Action: npm install @upstash/ratelimit   (or use a simple
+                      in-memory counter for internal-only deployments)
+                      Limit /api/auth to 10 attempts per IP per minute.
+                      Limit /api/user?search= to 30 requests per IP per minute.
+              Effort: ~1 hour
+
+  [ ] REL-4  Add size limit and cleanup to the user cache
+              File:   lib/auth.ts
+              Action: Add a max-entries check (e.g. 500 users) to the userCache Map.
+                      When limit is exceeded, evict the oldest entry.
+                      Or replace with a proper LRU cache:
+                        npm install lru-cache
+              Effort: ~30 minutes
+
+  [ ] REL-6  Eliminate the double getCurrentUser() call per render
+              Files:  app/page.tsx, app/layout.tsx
+              Action: Call getCurrentUser() only in page.tsx. Pass the result as
+                      a prop to the layout via a React context or by restructuring
+                      the layout to receive children with the user already resolved.
+                      Alternatively, wrap getCurrentUser() with React's cache():
+                        import { cache } from 'react';
+                        export const getCurrentUser = cache(async () => { ... });
+              Effort: ~30 minutes
+
+
+────────────────────────────────────────────────────────────────────────────────
+PHASE 4 — FEATURES & IMPROVEMENTS
+────────────────────────────────────────────────────────────────────────────────
+
+  [ ] FEAT-1  Replace PowerShell AD queries with ldapjs
+              File:   lib/auth.ts, app/api/user/route.ts
+              Action: ldapjs is already installed. Rewrite the AD lookup logic
+                      to use LDAP directly instead of spawning PowerShell processes.
+                      Benefits: faster, no injection risk, works cross-platform.
+              Effort: ~4 hours
+
+  [ ] FEAT-2  Add server-side sessions (or JWT) for edit mode
+              Action: On successful /api/auth, issue a signed JWT (jose library)
+                      stored in an httpOnly cookie. Read this cookie in all
+                      write-capable API routes to verify admin identity.
+                      This replaces the current browser-state-only approach.
+              Effort: ~3 hours
+
+  [ ] FEAT-3  Make the phonebook schema editable from the admin UI
+              File:   app/ClientPage.tsx
+              Action: The schema is currently managed in code. Add a modal for
+                      adding/removing/renaming phonebook columns, similar to how
+                      section schemas are managed in the section builder.
+              Effort: ~2 hours
+
+  [ ] FEAT-4  Add audit logging for admin actions
+              Action: Create an AuditLog SQL table (timestamp, username, action,
+                      target). Write to it on all create/update/delete operations
+                      in /api/sections and /api/phonebook.
+              Effort: ~2 hours
+
+  [ ] FEAT-5  Add search to the phonebook
+              File:   app/ClientPage.tsx
+              Action: The global search bar already filters phonebook rows.
+                      Consider adding a dedicated phonebook search field that
+                      filters independently from the section cards search.
+              Effort: ~1 hour
+
+  [ ] FEAT-6  Persist edit mode across page reloads (optional)
+              Action: After admin logs in, store the session in an httpOnly cookie
+                      (tied to FEAT-2). On page load, check the cookie and restore
+                      isEditMode = true if the session is still valid.
+              Effort: ~1 hour (requires FEAT-2 first)
+
+  [ ] FEAT-7  Add a confirmation step before deleting sections or items
+              File:   app/ClientPage.tsx
+              Action: Replace the browser confirm() dialogs (which are ugly) with
+                      a custom modal that shows the item name and asks for confirmation.
+              Effort: ~1.5 hours
+
+  [ ] FEAT-8  Add color picker for sections
+              File:   app/ClientPage.tsx (showCreateSectionModal)
+              Action: Currently color is auto-assigned from a round-robin list.
+                      Let the admin pick a color when creating or editing a section.
+              Effort: ~1 hour
+
+  [ ] FEAT-9  Add item ordering / drag-and-drop for cards
+              File:   app/ClientPage.tsx + app/api/sections/route.ts
+              Action: dnd-kit is already used for phonebook rows and schema fields.
+                      Extend it to allow dragging cards within or between sections.
+                      Requires adding a `sortOrder` column to the Items table.
+              Effort: ~3 hours
+
+
+────────────────────────────────────────────────────────────────────────────────
+PHASE 5 — MAINTENANCE & CLEANUP
+────────────────────────────────────────────────────────────────────────────────
+
+  [ ] MAINT-1  Split ClientPage.tsx into smaller components
+               Current size: ~1800 lines. Hard to navigate and maintain.
+               Suggested split:
+                 components/portal/SectionGrid.tsx      (section + card rendering)
+                 components/portal/Phonebook.tsx         (phonebook table)
+                 components/portal/SystemMessagesTicker.tsx
+                 components/modals/ViewItemModal.tsx
+                 components/modals/AddItemModal.tsx
+                 components/modals/SectionBuilderModal.tsx
+                 components/modals/LoginModal.tsx
+                 components/modals/SecurityModal.tsx
+               Effort: ~4 hours (mechanical, low risk)
+
+  [ ] MAINT-2  Move the admin list and color list to constants files
+               Action: Create lib/constants.ts with:
+                 export const AUTO_COLORS = [...]
+                 export const DEFAULT_PHONEBOOK_SCHEMA = [...]
+               Effort: ~20 minutes
+
+  [ ] MAINT-3  Add TypeScript interfaces for core data shapes
+               Action: Create types/portal.ts with:
+                 interface Section, Item, PhonebookRow, SystemMessage,
+                 FieldSchema, UserProfile, VisibilityConfig
+               This will catch a lot of the current `any` types.
+               Effort: ~1.5 hours
+
+  [ ] MAINT-4  Add error boundaries around the main UI sections
+               Action: Wrap SectionGrid, Phonebook, and SystemMessages in
+                       React error boundaries so one section failing doesn't
+                       crash the whole portal.
+               Effort: ~1 hour
+
+  [ ] MAINT-5  Add a health check endpoint
+               Action: Create app/api/health/route.ts that checks DB connectivity
+                       and returns { status: 'ok', db: 'connected' } or 500.
+                       Useful for PM2 monitoring and IIS health checks.
+               Effort: ~20 minutes
+
+  [ ] MAINT-6  Remove or archive the verify-password endpoint
+               File:   app/api/verify-password/route.ts
+               Action: This appears to be a legacy endpoint superseded by /api/auth.
+                       Confirm nothing calls it, then delete it.
+               Effort: ~15 minutes
+
+  [ ] MAINT-7  Write README.md with setup instructions
+               Action: Document how to:
+                 - Set up .env.local
+                 - Run database migrations (create the SQL tables)
+                 - Start the dev server
+                 - Deploy with PM2 + IIS
+                 - Add a new admin user
+               Effort: ~1 hour
+
+
+────────────────────────────────────────────────────────────────────────────────
+QUICK WINS  (under 30 minutes each, do these first for easy progress)
+────────────────────────────────────────────────────────────────────────────────
+
+  [ ] SEC-4   Remove hardcoded DB credential fallbacks           (~20 min)
+  [ ] SEC-7   Remove the NODE_ENV=development bypass             (~10 min)
+  [ ] REL-7   Load holiday settings on page mount                (~20 min)
+  [ ] MAINT-5 Add a /api/health endpoint                         (~20 min)
+  [ ] MAINT-6 Delete the legacy verify-password endpoint         (~15 min)
+  [ ] MAINT-2 Move constants to lib/constants.ts                 (~20 min)
+
+
+────────────────────────────────────────────────────────────────────────────────
+SUGGESTED ORDER OF WORK
+────────────────────────────────────────────────────────────────────────────────
+
+  Week 1:  All PHASE 1 items (critical security)
+  Week 2:  SEC-6, SEC-7, SEC-8 from PHASE 2 + Quick Wins
+  Week 3:  REL-7, REL-5, REL-3 from PHASE 3
+  Week 4:  FEAT-1 (ldapjs), FEAT-2 (sessions/JWT)
+  Ongoing: PHASE 4 features as time allows
+  Rainy day: MAINT-1 (split ClientPage.tsx)
+
+
+================================================================================
+TOTAL ITEMS: 38
+  Phase 1 (Critical security):     5 items
+  Phase 2 (Authorization gaps):    4 items
+  Phase 3 (Reliability):           6 items
+  Phase 4 (Features):              9 items
+  Phase 5 (Maintenance):           7 items
+  Quick wins (cross-phase):        6 items (already counted above)
+================================================================================
