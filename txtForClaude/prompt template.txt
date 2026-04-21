@@ -18,6 +18,8 @@ Tech stack:
   - NTLM Windows authentication decoded in lib/auth.ts
   - Active Directory enrichment via PowerShell (Get-ADUser)
   - AES-256-CBC encryption (Node.js crypto) for password fields
+  - JWT sessions via `jose` library (HS256, 1-hour expiry, httpOnly cookie)
+  - bcryptjs for admin password hashing
   - xlsx library for Excel import/export (client-side)
 
 Project structure:
@@ -25,14 +27,16 @@ Project structure:
   - app/ClientPage.tsx        Entire UI in one large client component (~1800 lines)
   - app/layout.tsx            Root layout, loads fonts
   - app/api/sections/         Main CRUD + visibility filtering + encryption
-  - app/api/auth/             Admin login check
+  - app/api/auth/             Admin login → bcrypt check → JWT cookie
+  - app/api/logout/           Clears admin_token cookie
+  - app/api/verify-pin/       Server-side PIN check for revealing passwords
   - app/api/phonebook/        Contact directory
   - app/api/messages/         System announcements
-  - app/api/user/             NTLM identity + AD lookup
-  - app/api/settings/         Holiday decoration toggles (JSON file, not SQL)
-  - lib/auth.ts               NTLM decoder, AD enrichment, user cache
-  - lib/db.ts                 MSSQL connection pool singleton
-  - components/               IndependenceDayDecor.tsx, MemorialDayBanner.tsx
+  - app/api/user/             NTLM identity + AD lookup (input validated)
+  - app/api/settings/         Holiday decoration toggles (JSON file)
+  - lib/auth.ts               NTLM decoder, AD enrichment, user cache,
+                              createAdminToken(), verifyAdminToken()
+  - lib/db.ts                 MSSQL connection pool (env vars only, no fallbacks)
 
 Database tables (SQL Server):
   Sections        (Id, Title, Color, SchemaDef JSON)
@@ -40,19 +44,29 @@ Database tables (SQL Server):
   SystemMessages  (id, text, date)
   PhonebookConfig (Id=1, SchemaDef JSON)
   PhonebookData   (Id=1, Content JSON blob)
-  AuthorizedUsers (Username)
-  GlobalSettings  (SettingKey, SettingValue) — stores EditPassword
+  AuthorizedUsers (Username) — current: itayc, gal, michaelg, idant
+  GlobalSettings  (SettingKey, SettingValue) — EditPassword = bcrypt hash
+
+Security status (completed):
+  - AES key in ENCRYPTION_KEY env var (not hardcoded)
+  - Admin password bcrypt hashed in DB
+  - PowerShell injection protected with regex validation
+  - DB credentials in env vars only
+  - Password reveal PIN checked server-side
+  - Admin list in NEXT_PUBLIC_ADMIN_USERS env var
+  - JWT httpOnly cookie for admin sessions
+  - All POST /api/sections require valid JWT (401 if missing)
 
 Key conventions:
   - Hebrew strings are used throughout the UI — preserve them exactly
-  - isEditMode controls admin UI — gated by /api/auth password check
+  - isEditMode controls admin UI — gated by JWT cookie on the server
   - Item visibility is a comma-separated string: 'הכל' = everyone,
-    otherwise a list of department names / usernames / AD groups
+    otherwise department names / usernames / job titles / AD groups
   - Password fields are AES encrypted in SQL, decrypted before sending to client
-  - The phonebook uses a draft/commit pattern: draftPhonebook (edit) vs
-    phonebookData (saved). Changes are saved explicitly.
+  - Phonebook uses draft/commit pattern: draftPhonebook (edit) vs phonebookData (saved)
   - All API routes return HTTP 200 even on auth failure (to avoid browser dialogs)
   - Direction is RTL (dir="rtl"), layout is right-to-left
+  - Admin cookie: name = admin_token, httpOnly, sameSite=strict, maxAge=3600
 
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -88,6 +102,7 @@ Where in the codebase it belongs:
 Constraints:
   - Must work with existing NTLM auth flow
   - Must respect the visibility/permissions system
+  - Must verify JWT cookie if it involves admin writes
   - [Any other constraints]
 
 Existing code it interacts with:
@@ -101,7 +116,7 @@ Current behavior:
   [What it does now]
 
 Problem with the current approach:
-  [Why it needs to change — performance, readability, security, etc.]
+  [Why it needs to change]
 
 Desired outcome:
   [What the refactored version should do differently]
@@ -111,10 +126,10 @@ Relevant code:
 
 
 ── Option 4: Security fix ──
-I want to fix [ISSUE ID from PROJECT_MAP.txt, e.g. SEC-1].
+I want to fix [ISSUE ID from project map, e.g. REL-1].
 
 Issue summary:
-  [Copy the description from PROJECT_MAP.txt]
+  [Copy the description from the project map]
 
 Current vulnerable code:
   [Paste it]
@@ -122,7 +137,7 @@ Current vulnerable code:
 Constraints:
   - Must not break existing functionality
   - Must work with the current MSSQL schema
-  - [Any migration notes, e.g. existing encrypted data must remain readable]
+  - [Any migration notes]
 
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -173,7 +188,7 @@ Environment:
   [ ] This runs on Windows Server with IIS — no Linux-specific solutions
   [ ] PowerShell is available on the server
   [ ] ldapjs is installed but not yet used (it's in package.json)
-  [ ] The SQL Server instance name is SQLEXPRESS
+  [ ] Local SQL instance: SQLEXPRESS01 / Production: SQLEXPRESS
   [ ] We are on an internal network — no public internet from the server
 
 Code style:
@@ -183,11 +198,98 @@ Code style:
   [ ] Tailwind 4 (not v3) — some class names differ
 
 Current state of the codebase:
-  [ ] AES key is still hardcoded — do not assume ENCRYPTION_KEY env var exists yet
-  [ ] Edit password is still plaintext in DB — do not assume bcrypt is set up
+  [ ] AES key is in ENCRYPTION_KEY env var
+  [ ] Admin password is bcrypt hashed in local DB, plain text in production
+  [ ] JWT session system is in place (jose library)
   [ ] ldapjs is not yet wired up — PowerShell is still used for AD queries
   [ ] dynamic_db.json still exists but is not the source of truth (SQL is)
 
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION F: NAVIGATE ME TO THE CODE  (always add this at the end of your request)
+────────────────────────────────────────────────────────────────────────────────
+
+After reading my request above, before writing any code:
+
+  1. Tell me exactly which file(s) I need to open.
+
+  2. Tell me which section of that file to look at, using this format:
+
+       File:      app/ClientPage.tsx
+       Section:   "ניהול מצב (STATE)" comment block
+       Look for:  the useState declaration for [X]
+       Approx:    top third of the file
+
+  3. If the change touches more than one file, list them in the order
+     I should edit them (dependencies first).
+
+  4. If I need to create a new file, tell me exactly where to put it.
+
+  5. Then give me the code.
+
+─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+
+FILE MAP — sections inside ClientPage.tsx (search for these exactly):
+
+  // ==================== ייבוא ספריות (IMPORTS) ====================
+  // ==================== רכיבי עזר (HELPER COMPONENTS) ====================
+  // ==================== הקומפוננטה הראשית (MAIN COMPONENT) ====================
+  // ==================== הרשאות ובסיס (PERMISSIONS) ====================
+      authorizedAdmins (from env), isUserAdmin, todayFormatted
+  // ==================== ניהול מצב (STATE) ====================
+      All useState declarations
+  // ==================== רפרנסים וחיישנים (REFS & SENSORS) ====================
+  // ==================== אפקטים (USE EFFECTS) ====================
+      fetchSections() defined just after the first useEffect
+  // ==================== פונקציות: סכמות וקטגוריות ====================
+      addFieldToSchema, handleSaveSection, openEditSectionModal, handleDeleteSection
+  // ==================== פונקציות: פריטים (מוצרים/נהלים) ====================
+      handleSaveItem, openEditItemModal, handleDeleteItem
+  // ==================== פונקציות: ניהול קבצים ====================
+      handleFileSelect, handleRemoveFile
+  // ==================== פונקציות: מערכת הודעות ====================
+      addSystemMessage, removeSystemMessage
+  // ==================== פונקציות: ספר טלפונים ואקסל ====================
+      savePhonebookData, addPhonebookRow, deletePhonebookRow,
+      handleExcelUpload, downloadExcelTemplate
+  // ==================== פונקציות: אבטחה והתחברות ====================
+      handleLogin (calls /api/auth, receives JWT cookie)
+      handleSecurityVerify (calls /api/verify-pin — no client-side PIN)
+      copyToClipboard, handlePasswordAction
+  // ==================== פונקציות: ימי הולדת ====================
+      getBirthdayCelebrants
+  // ==================== פונקציות: DND ====================
+      handleDragEnd, handlePhonebookDragEnd
+  // ==================== פונקציות: עיצוב וערכות נושא ====================
+      getColorClasses, getCardGradientTheme, BirthdayTicker
+  // ==================== רינדור המסך (RENDER / JSX) ====================
+      JSX sub-sections:
+        {/* HEADER */}
+        {/* MAIN CONTENT */}
+        {/* אזור 1: הודעות מערכת */}
+        {/* אזור 2: חיפוש */}
+        {/* אזור 3: קטגוריות ומוצרים */}
+        {/* אזור 3.5: הוספת קטגוריה */}
+        {/* אזור 4: ספר טלפונים */}
+        {/* אזור 5: הגדרות מערכת */}
+        {/* MODALS */}
+        {/* מודל 1: צפייה בפרטי פריט */}
+        {/* מודל 2: בונה הקטגוריות */}
+        {/* מודל 3: טופס הוספת/עריכת פריט */}
+        {/* מודל 4: התחברות למצב אדמין */}
+        {/* מודל 5: בדיקת אבטחה לחשיפת סיסמאות */}
+
+─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+
+FILE MAP — sections inside app/api/sections/route.ts:
+
+  // --- הגדרות הצפנה ---       reads ENCRYPTION_KEY from env
+  // --- פונקציות עזר ---       encryptText, decryptText, encryptAllData, decryptAllData
+  // --- API HANDLERS ---
+  //   GET:  visibility filtering, JWT check for editMode
+  //   POST: JWT verification (first thing) → action switch:
+  //           create_section / update_section / delete_section
+  //           add_item / update_item / delete_item
 
 ────────────────────────────────────────────────────────────────────────────────
 QUICK REFERENCE — COMMON PATTERNS IN THIS CODEBASE
@@ -202,12 +304,19 @@ Fetching sections (client):
     editMode:   isEditMode ? 'true' : 'false'
   })}`);
 
-Saving an item (client):
+Saving an item (client) — JWT cookie sent automatically by browser:
   await fetch('/api/sections', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'update_item', sectionId, itemId, data, visibility })
   });
+
+JWT verification (server-side, in any API route):
+  import { verifyAdminToken } from '@/lib/auth';
+  const cookieHeader = request.headers.get('cookie') || '';
+  const adminToken = cookieHeader.match(/admin_token=([^;]+)/)?.[1] || '';
+  const isValidAdmin = await verifyAdminToken(adminToken);
+  if (!isValidAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
 Getting the DB connection (server):
   import { getConnection } from '@/lib/db';
@@ -225,133 +334,8 @@ Visibility check pattern (server):
     allowedList.includes(userTitle) ||
     userGroups.some(g => allowedList.includes(g));
 
-Color classes available for sections:
-  red | blue | green | purple | orange | teal | indigo | pink
-
-Field types available in section schema:
-  text | textarea | link | password | file | folder
-
-────────────────────────────────────────────────────────────────────────────────
-SECTION F: NAVIGATE ME TO THE CODE  (always add this at the end of your request)
-────────────────────────────────────────────────────────────────────────────────
-
-After reading my request above, before writing any code:
-
-  1. Tell me exactly which file(s) I need to open.
-
-  2. Tell me which section of that file to look at, using this format:
-
-       File:      app/ClientPage.tsx
-       Section:   "ניהול מצב (STATE)" comment block
-       Look for:  the useState declaration for [X]
-       Approx:    top third of the file
-
-       File:      app/api/sections/route.ts
-       Section:   POST handler, inside the 'add_item' action branch
-       Look for:  the sql.Request() call that inserts into Items
-       Approx:    bottom half of the file
-
-  3. If the change touches more than one file, list them in the order
-     I should edit them (dependencies first).
-
-  4. If I need to create a new file, tell me exactly where to put it
-     and what to name it.
-
-  5. Then give me the code.
-
-─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-
-FILE MAP — sections inside ClientPage.tsx (use these names when navigating)
-
-  The file is divided by these Hebrew comment banners. Search for them exactly:
-
-  // ==================== ייבוא ספריות (IMPORTS) ====================
-      Top of file. All import statements.
-
-  // ==================== רכיבי עזר (HELPER COMPONENTS) ====================
-      SortableRow and SortableField components.
-
-  // ==================== הקומפוננטה הראשית (MAIN COMPONENT) ====================
-      Start of DynamicIPIDashboard function.
-
-  // ==================== הרשאות ובסיס (PERMISSIONS) ====================
-      authorizedAdmins array, isUserAdmin check, todayFormatted.
-
-  // ==================== ניהול מצב (STATE) ====================
-      All useState declarations grouped by category.
-
-  // ==================== רפרנסים וחיישנים (REFS & SENSORS) ====================
-      scrollContainerRef, dnd-kit sensors.
-
-  // ==================== אפקטים (USE EFFECTS) ====================
-      All useEffect hooks. fetchSections() is defined just after the first one.
-
-  // ==================== פונקציות: סכמות וקטגוריות ====================
-      addFieldToSchema, removeFieldFromSchema, handleSaveSection,
-      openEditSectionModal, handleDeleteSection.
-
-  // ==================== פונקציות: פריטים (מוצרים/נהלים) ====================
-      handleSaveItem, openEditItemModal, handleDeleteItem.
-
-  // ==================== פונקציות: ניהול קבצים ====================
-      handleFileSelect, handleRemoveFile.
-
-  // ==================== פונקציות: מערכת הודעות ====================
-      addSystemMessage, removeSystemMessage.
-
-  // ==================== פונקציות: ספר טלפונים ואקסל ====================
-      savePhonebookData, savePhonebookSchema, addColumn, removeColumn,
-      addPhonebookRow, deletePhonebookRow, updatePhonebookCell,
-      handleExcelUpload, downloadExcelTemplate.
-
-  // ==================== פונקציות: אבטחה והתחברות ====================
-      handleLogin, copyToClipboard, handlePasswordAction,
-      handleSecurityVerify.
-
-  // ==================== פונקציות: ימי הולדת ====================
-      getBirthdayCelebrants, birthdayCelebrants.
-
-  // ==================== פונקציות: DND (גרירה ושחרור) ====================
-      handleDragEnd, handlePhonebookDragEnd.
-
-  // ==================== פונקציות: עיצוב וערכות נושא ====================
-      getColorClasses, getCardGradientTheme, BirthdayTicker component.
-
-  // ==================== רינדור המסך (RENDER / JSX) ====================
-      The return() statement. All JSX from here to end of file.
-      Sub-sections inside the JSX (search for these):
-        {/* ==================== אזור כותרת עליונה (HEADER) ==================== */}
-        {/* ==================== תוכן מרכזי (MAIN CONTENT) ==================== */}
-        {/* --- אזור 1: הודעות מערכת רצות (System Messages) --- */}
-        {/* --- אזור 2: חיפוש כללי מתקדם (Search Bar) --- */}
-        {/* --- אזור 3: קטגוריות ומוצרים (Sections Loop) --- */}
-        {/* --- אזור 3.5: הוספת קטגוריה --- */}
-        {/* --- אזור 4: ספר טלפונים --- */}
-        {/* --- אזור 5: הגדרות מערכת --- */}
-        {/* ==================== חלונות קופצים (MODALS) ==================== */}
-        {/* --- מודל 1: צפייה בפרטי פריט --- */}
-        {/* --- מודל 2: בונה הקטגוריות --- */}
-        {/* --- מודל 3: טופס הוספת/עריכת פריט --- */}
-        {/* --- מודל 4: התחברות למצב אדמין --- */}
-        {/* --- מודל 5: בדיקת אבטחה לחשיפת סיסמאות --- */}
-
-─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-
-FILE MAP — sections inside app/api/sections/route.ts
-
-  // --- הגדרות הצפנה ---       ENCRYPTION_KEY, IV_LENGTH
-  // --- פונקציות עזר ---       encryptText, decryptText
-  //                            encryptAllData, decryptAllData
-  // --- ניהול קבצים ---        getData, saveData  (legacy JSON — ignore)
-  // --- API HANDLERS ---
-  //   export async function GET    visibility filtering logic
-  //   export async function POST   action switch:
-  //     'create_section'
-  //     'update_section'
-  //     'add_item'
-  //     'update_item'
-  //     'delete_section'
-  //     'delete_item'
+Color classes: red | blue | green | purple | orange | teal | indigo | pink
+Field types:   text | textarea | link | password | file | folder
 
 ================================================================================
 END OF PROMPT TEMPLATE
