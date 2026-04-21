@@ -13,8 +13,11 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@prisma/client": "^7.3.0",
+    "autoprefixer": "^10.5.0",
+    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "framer-motion": "^12.34.4",
+    "jose": "^6.2.2",
     "ldapjs": "^3.0.7",
     "lucide-react": "^0.563.0",
     "mssql": "^12.2.0",
@@ -25,7 +28,8 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.2.3",
+    "@types/bcryptjs": "^2.4.6",
     "@types/ldapjs": "^3.0.6",
     "@types/mssql": "^9.1.9",
     "@types/node": "^20",
@@ -34,7 +38,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "prisma": "^7.3.0",
-    "tailwindcss": "^4",
+    "tailwindcss": "^4.2.3",
     "typescript": "^5"
   }
 }

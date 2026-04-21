@@ -9,15 +9,19 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const searchTerm = searchParams.get('search');
 
-  // --- תרחיש חיפוש: בדיקה מול ה-AD האם המשתמש או הטייטל קיימים ---
   if (searchTerm) {
+    // SEC-3: validate input before passing to PowerShell
+    const isSafe = /^[a-zA-Z0-9_\-\.@\u0590-\u05FF ]+$/.test(searchTerm);
+    if (!isSafe || searchTerm.length > 64) {
+        return NextResponse.json({ exists: false, error: 'Invalid input' }, { status: 200 });
+    }
+
     try {
       const adServers = ['192.168.1.243', '192.168.1.244'];
 
       for (const server of adServers) {
         try {
          
-          // אנחנו מחפשים כעת אובייקט ב-AD: האם יש משתמש או קבוצת הרשאות בשם שהוקלד?
           const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "chcp 65001 >$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ADObject -Filter \\"sAMAccountName -eq '${searchTerm}' -or Name -eq '${searchTerm}'\\" -Server '${server}' | Select-Object Name"`;
           const { stdout } = await execPromise(psCommand, { windowsHide: true });
 
