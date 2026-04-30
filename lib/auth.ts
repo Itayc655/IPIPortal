@@ -2,7 +2,26 @@ import { headers } from 'next/headers';
 import { exec } from 'child_process';
 import util from 'util';
 import dns from 'dns/promises';
+import { SignJWT, jwtVerify } from 'jose';
 
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-secret');
+
+export async function createAdminToken() {
+    return await new SignJWT({ role: 'admin' })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setIssuedAt()
+        .setExpirationTime('1h')
+        .sign(JWT_SECRET);
+}
+
+export async function verifyAdminToken(token: string) {
+    try {
+        const { payload } = await jwtVerify(token, JWT_SECRET);
+        return payload.role === 'admin';
+    } catch {
+        return false;
+    }
+}
 const execPromise = util.promisify(exec);
 
 

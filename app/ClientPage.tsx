@@ -110,10 +110,10 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
     // ==================== הרשאות ובסיס (PERMISSIONS) ====================
     // רשימת המורשים לעריכה (Admins)
-    const authorizedAdmins = ['itayc', 'gal', 'michaelg'].map(u => u.toLowerCase());
+    const authorizedAdmins = (process.env.NEXT_PUBLIC_ADMIN_USERS || '').split(',').map(u => u.toLowerCase().trim());
 
     // מעקף סביבת פיתוח: מזהה אם אנחנו רצים מקומית ונותן הרשאות אוטומטית
-    const isUserAdmin = process.env.NODE_ENV === 'development'
+    const isUserAdmin = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_DEV_ADMIN === 'true'
         ? true
         : (initialUser?.username
             ? authorizedAdmins.includes(initialUser.username.toLowerCase())
@@ -687,29 +687,42 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
         setShowSecurityModal(true);
     };
 
-    const handleSecurityVerify = (e: React.FormEvent) => {
+    const handleSecurityVerify = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (securityInput === '123456') {
-            const key = pendingAction!.key;
-            let timeLeft = 10;
-            setUnlockedPasswords(prev => ({ ...prev, [key]: timeLeft }));
+        try {
+            const res = await fetch('/api/verify-pin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin: securityInput })
+            });
+            const data = await res.json();
 
-            const timer = setInterval(() => {
-                timeLeft -= 1;
+            if (data.success) {
+                const key = pendingAction!.key;
+                let timeLeft = 10;
                 setUnlockedPasswords(prev => ({ ...prev, [key]: timeLeft }));
-                if (timeLeft <= 0) {
-                    clearInterval(timer);
-                    setVisiblePasswords(prev => ({ ...prev, [key]: false }));
-                }
-            }, 1000);
 
-            if (pendingAction?.type === 'toggle') setVisiblePasswords(prev => ({ ...prev, [key]: true }));
-            else if (pendingAction?.type === 'copy') copyToClipboard(pendingAction.value, key);
+                const timer = setInterval(() => {
+                    timeLeft -= 1;
+                    setUnlockedPasswords(prev => ({ ...prev, [key]: timeLeft }));
+                    if (timeLeft <= 0) {
+                        clearInterval(timer);
+                        setVisiblePasswords(prev => ({ ...prev, [key]: false }));
+                    }
+                }, 1000);
 
-            setShowSecurityModal(false); setPendingAction(null);
-        } else alert("סיסמה שגויה!");
+                if (pendingAction?.type === 'toggle') setVisiblePasswords(prev => ({ ...prev, [key]: true }));
+                else if (pendingAction?.type === 'copy') copyToClipboard(pendingAction.value, key);
+
+                setShowSecurityModal(false);
+                setPendingAction(null);
+            } else {
+                alert(data.message || 'PIN שגוי!');
+            }
+        } catch (error) {
+            alert('שגיאת תקשורת מול השרת');
+        }
     };
-
 
     // ==================== פונקציות: ימי הולדת ====================
     const getBirthdayCelebrants = () => {
@@ -849,7 +862,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
                 {/* אמצע: פרטי המשתמש הנוכחי (מראה אחיד) */}
                 <div className="absolute top-2 2xl:top-4 left-1/2 -translate-x-1/2 text-center flex flex-col items-center text-slate-600 font-semibold text-sm md:text-base 2xl:text-lg tracking-wide">
-                    
+
                     {/* שורה עליונה */}
                     <div className="flex items-center justify-center">
                         <span>{initialUser?.displayName || initialUser?.username || 'אורח'}</span>
@@ -871,12 +884,13 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                 {isUserAdmin && (
                     <div className="w-48 flex justify-end">
                         <button
-                            onClick={() => {
+                            onClick={async () => {
                                 if (isEditMode) {
+                                    await fetch('/api/logout', { method: 'POST' });
                                     setIsEditMode(false);
                                     setIsPhonebookEditMode(false);
                                 } else {
-                                    setShowLoginModal(true); // דורש סיסמה לכניסה למצב עריכה
+                                    setShowLoginModal(true);
                                 }
                             }}
                             className={`flex items-center gap-2 2xl:gap-3 px-4 2xl:px-6 py-2 2xl:py-3 rounded-full font-bold text-sm 2xl:text-base cursor-pointer transition-all border shadow-sm 
@@ -1340,9 +1354,9 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                 הגדרות אווירה מיוחדות
                             </h3>
                         </div>
-{/* קוביות השליטה של החגים בלבד */}
+                        {/* קוביות השליטה של החגים בלבד */}
                         <div className="flex flex-col gap-4 opacity-80 hover:opacity-100 transition-opacity duration-300">
-                            
+
                             {/* קישוט יום העצמאות */}
                             <div className="bg-white p-4 rounded-3xl border border-blue-100 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
                                 <div className="flex items-center gap-4">
@@ -1354,7 +1368,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                         <p className="text-sm text-slate-500 font-medium">הצג שרשרת דגלים מתנפנפת בראש הפורטל</p>
                                     </div>
                                 </div>
-                                <button 
+                                <button
                                     onClick={() => {
                                         const newState = !showHolidayDecor;
                                         setShowHolidayDecor(newState);
@@ -1377,9 +1391,9 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                         <p className="text-sm text-slate-500 font-medium">הצג באנר שחור עליון עם נר נשמה</p>
                                     </div>
                                 </div>
-                                
+
                                 <div className="flex bg-slate-50 p-1.5 rounded-2xl border border-slate-100 w-full md:w-auto">
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             setMemorialDayType(null);
                                             saveSettingsImmediately(showHolidayDecor, null);
@@ -1388,7 +1402,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                     >
                                         כבוי
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             setMemorialDayType('holocaust');
                                             saveSettingsImmediately(showHolidayDecor, 'holocaust');
@@ -1397,7 +1411,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                     >
                                         יום הזיכרון לשואה
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             setMemorialDayType('idf');
                                             saveSettingsImmediately(showHolidayDecor, 'idf');
