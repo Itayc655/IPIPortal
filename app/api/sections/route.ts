@@ -131,7 +131,7 @@ export async function GET(request: Request) {
 
     const pool = await getConnection();
 
-    const sectionsResult = await pool.request().query('SELECT * FROM Sections');
+    const sectionsResult = await pool.request().query('SELECT * FROM Sections ORDER BY SortOrder ASC');
     const itemsResult = await pool.request().query('SELECT * FROM Items');
 
     const sections = sectionsResult.recordset;
@@ -274,9 +274,18 @@ export async function POST(request: Request) {
         .input('Id', sql.BigInt, body.itemId)
         .query('DELETE FROM Items WHERE Id = @Id');
     }
+    else if (body.action === 'reorder_sections') {
+      for (const item of body.order) {
+        const req = new sql.Request(pool);
+        await req
+          .input('Id', sql.BigInt, item.id)
+          .input('SortOrder', sql.Int, item.sortOrder)
+          .query('UPDATE Sections SET SortOrder = @SortOrder WHERE Id = @Id');
+      }
+    }
 
     console.log('>>> 5. Fetching updated data from SQL...');
-    const sectionsResult = await pool.request().query('SELECT * FROM Sections');
+    const sectionsResult = await pool.request().query('SELECT * FROM Sections ORDER BY SortOrder ASC');
     const itemsResult = await pool.request().query('SELECT * FROM Items');
 
     const sectionsData = sectionsResult.recordset;
