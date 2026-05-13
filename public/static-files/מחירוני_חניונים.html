@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>מחירוני חניונים</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      direction: rtl;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 100%);
+      color: white;
+      padding: 28px 24px 20px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    header h1 { font-size: 1.9rem; font-weight: 700; letter-spacing: 0.5px; }
+
+    #file-date {
+      font-size: 0.9rem;
+      opacity: 0.8;
+      margin-top: 6px;
+      min-height: 1.2em;
+    }
+
+    .search-bar {
+      max-width: 520px;
+      margin: 18px auto 0;
+    }
+
+    .search-bar input {
+      width: 100%;
+      padding: 11px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      direction: rtl;
+      outline: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+
+
+    /* Summary */
+    .summary {
+      text-align: center;
+      color: #555;
+      font-size: 0.85rem;
+      margin: 12px 0 4px;
+    }
+
+    /* Grid & cards */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 18px;
+      padding: 20px 28px 40px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      overflow: hidden;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.13);
+    }
+
+    .card-header {
+      background: linear-gradient(135deg, #1e3a5f, #2d6a9f);
+      color: white;
+      padding: 14px 16px;
+    }
+
+    .card-header h2 { font-size: 1.05rem; font-weight: 700; line-height: 1.3; }
+
+    .card-body { padding: 14px 16px; }
+
+    .detail-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+
+    .detail-row:last-child { margin-bottom: 0; }
+
+    .icon {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      margin-top: 1px;
+    }
+
+    .icon-grace  { background: #e8f4fd; color: #1a6fa8; }
+    .icon-tariff { background: #e6f4ea; color: #2d7a3a; }
+    .icon-badge  { background: #fff3e0; color: #b45309; }
+    .icon-app    { background: #f0f0f0; color: #555; }
+
+    .detail-text { flex: 1; color: #333; white-space: pre-line; }
+
+    .tag {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    .tag-app { background: #e8eaf6; color: #3949ab; }
+
+    .hidden { display: none; }
+
+    #no-results {
+      text-align: center;
+      color: #888;
+      font-size: 1rem;
+      padding: 60px 20px;
+      display: none;
+      grid-column: 1 / -1;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>מחירוני חניונים</h1>
+  <p id="file-date">עדכון: 03.03</p>
+
+  <div class="search-bar">
+    <input type="text" id="search" placeholder="חיפוש לפי שם חניון..." oninput="filterCards()">
+  </div>
+
+</header>
+
+<p class="summary" id="summary"></p>
+
+<div class="grid" id="grid">
+  <div id="no-results">לא נמצאו חניונים התואמים את החיפוש</div>
+</div>
+
+<script>
+// __ LOTS_START __
+const builtInLots = [
+  {"name":"בית חולים אסותא אשדוד","details":["זמן חסד : חצי שעה","תעריף : 30 ₪ ל24 שעות","נכים חינם - מאגר נכים","סלופארק"]},
+  {"name":"בית חולים אסותא באר שבע","details":["זמן חסד : 10 דקות","תעריף : בין ראשון לחמישי שעות 07:00-17:00 מחירון 0.4 ₪ לדקה , 80 ₪ מקסימאלי","מחירון לילה מ22:00 ועד 07:00 למחרת 0.05 ₪ לדקה , 25 ₪ מקסימאלי","שישי מ07:00 ועד 14:00 מחירון 0.4 ₪ לדקה , 80 ₪ מקסימאלי","משישי שעה 14:00 ועד ראשון בשעה 07:00 מחירון לילה , 0.05 ₪ לדקה , 25 ₪ מקסימאלי","אין נכים - מקבלים כרטיסי יציאה","סלופארק + פנגו","Ticketless"]},
+  {"name":"בית חולים אסותא רמת החייל","details":["זמן חסד : 15 דקות","תעריף : 0.40 ₪ לדקה , מקסימום עד חצות 70 ₪","יש קבוצות שמקבלות מחיר קבוע","נכים : לשחרר לאחר בדיקה","סלופארק + פנגו"]},
+  {"name":"כיכר אתרים","details":["זמן חסד : 15 דקות","תעריף : 0.40 ₪ לדקה , מקסימום עד חצות 80 ₪","יש קבוצת הנחה 10% : 0.36 ₪ לדקה , מקסימום עד חצות 72 ₪","נכים כסא גלגלים - חניה חינם שעתיים","Ticketless"]},
+  {"name":"אוניברסיטת בר אילן","details":["זמן חסד : רבע שעה","תעריף : 30 ₪ עד חצות","סטודנטים (קבוצת הנחה) 15 ₪ עד חצות"]},
+  {"name":"קניון בת ימון","details":["זמן חסד : חצי שעה","תעריף : 0.30 ₪ לדקה , מקסימום עד חצות 60 ₪","יש קבוצות שמקבלות מחיר קבוע","נכים : נכה רגיל - שעה חינם , נכה כסא גלגלים - שעתיים חינם","סלופארק + פנגו","Ticketless"]},
+  {"name":"קאנטרי מבשרת ציון","details":["זמן חסד : שעתיים","תעריף : 0.30 ₪ לדקה , מקסימום 50 ₪ ל24 שעות"]},
+  {"name":"בית חולים העמק","details":["זמן חסד : חצי שעה","תעריף : 25 ₪ עד חצות","נכים חינם - מאגר נכים","סלופארק + פנגו"]},
+  {"name":"גן לונדון","details":["זמן חסד : רבע שעה","תעריף : 0.40 ₪ לדקה , מקסימום עד חצות 70 ₪","יש קבוצת הנחה תושבים 25% - 0.30 ₪ לדקה , מקסימום עד חצות 60 ₪","נכים : כסא גלגלים שעתיים חינם","סלופארק + פנגו"]},
+  {"name":"הום סנטר בני ברק","details":["זמן חסד : 20 דקות","תעריף : 0.50 ₪ לדקה , מקסימום עד חצות 80 ₪","Ticketless"]},
+  {"name":"JLTV אגמים נתניה","details":["זמן חסד : 90 דקות","תעריף : 0.40 ₪ לדקה , מקסימום עד חצות 50 ₪"]},
+  {"name":"בית חולים קפלן","details":["זמן חסד : חצי שעה","תעריף : 25 ₪ עד חצות","נכים חינם - מאגר נכים","סלופארק + פנגו"]},
+  {"name":"קריית מוצקין","details":["זמן חסד : 150 דקות","תעריף : 0.50 ₪ לדקה , מקסימום עד חצות 120 ₪","Ticketless"]},
+  {"name":"בית חולים לניאדו","details":["זמן חסד : חצי שעה","תעריף : 30 ₪ ל24 שעות","נכים חינם - מאגר נכים"]},
+  {"name":"מכבי בני ברק","details":["זמן חסד : 15 דקות","תעריף : 0.50 ₪ לדקה , מקסימום יומי 90 ₪ עד חצות","נכים עם כסא גלגלים חינם","סלופארק + פנגו"]},
+  {"name":"מכבי חולון","details":["זמן חסד : חצי שעה","תעריף : 10 ₪ עד חצות","נכים חינם - מאגר נכים"]},
+  {"name":"מגרסה MBC","details":["זמן חסד : שעה","תעריף : 0.17 ₪ לדקה , מקסימום 50 ₪ עד חצות"]},
+  {"name":"מדיקל סנטר (רשת)","details":["זמן חסד : אין","תעריף : 0.60 ₪ לדקה , מקסימום 130 ₪ עד חצות"]},
+  {"name":"בית חולים מאיר","details":["זמן חסד : חצי שעה","תעריף : 30 ₪ עד חצות","נכים חינם - מאגר נכים","סלופארק + פנגו","Ticketless"]},
+  {"name":"מוגרבי","details":["זמן חסד : אין","תעריף : 0.50 ₪ לדקה , מקסימום עד חצות 80 ₪","Ticketless"]},
+  {"name":"אושירה","details":["זמן חסד : 90 דקות","תעריף : 0.60 ₪ לדקה , מקסימום עד חצות 130 ₪","סלופארק + פנגו","Ticketless"]},
+  {"name":"פארק אריאל שרון","details":["זמן חסד : רבע שעה","תעריף : 24 ₪ עד חצות","נכים חינם - מאגר נכים","פנגו","Ticketless"]},
+  {"name":"רמת הנדיב","details":["זמן חסד : 20 דקות","תעריף : 30 ₪ עד חצות","נכים חינם - מאגר נכים","סלופארק + פנגו"]},
+  {"name":"רוגובין תדהר","details":["זמן חסד : רבע שעה","תעריף : 0.60 ₪ לדקה , 130 ₪ מקסימום עד חצות"]},
+  {"name":"רוגובין נתניה","details":["זמן חסד : שעה","תעריף : 0.40 ₪ לדקה , מקסימום עד חצות 90 ₪","נכים - עוד שעה חינם","סלופארק + פנגו","Ticketless"]},
+  {"name":"רופין","details":["זמן חסד : חצי שעה","תעריף : 20 ₪ עד חצות","סטודנטים 15 ₪ עד חצות","Ticketless"]},
+  {"name":"קניון סחרוב ראשון לציון","details":["זמן חסד : חצי שעה","תעריף : 0.30 ₪ לדקה , מקסימום עד חצות 60 ₪","נכים : נכה רגיל - שעה חינם , נכה כסא גלגלים - שעתיים חינם","Ticketless"]},
+  {"name":"סמינר הקיבוצים","details":["זמן חסד : 20 דקות","תעריף : 22 ₪ עד חצות"]},
+  {"name":"שופרסל איילון","details":["זמן חסד : 25 דקות","תעריף : 0.50 ₪ לדקה , מקסימום 80 ₪ עד חצות","נכים חינם - מאגר נכים","Ticketless"]},
+  {"name":"שופרסל בת ים","details":["זמן חסד : 25 דקות","תעריף : 0.50 ₪ לדקה , מקסימום 80 ₪ עד חצות","נכים חינם - מאגר נכים"]},
+  {"name":"שופרסל באר שבע","details":["זמן חסד : 25 דקות","תעריף : 0.50 ₪ לדקה , מקסימום 80 ₪ עד חצות","נכים חינם - מאגר נכים"]},
+  {"name":"שופרסל בייט ירושלים","details":["זמן חסד : 25 דקות","תעריף : 0.50 ₪ לדקה , מקסימום 80 ₪ עד חצות","נכים חינם - מאגר נכים"]},
+  {"name":"שופרסל בית וגן","details":["זמן חסד : 25 דקות","תעריף : 1 ₪ לדקה , מקסימום 100 ₪ עד חצות","נכים חינם - מאגר נכים"]},
+  {"name":"שופרסל הקריון","details":["זמן חסד : 25 דקות","תעריף : 0.50 ₪ לדקה , מקסימום 80 ₪ עד חצות","נכים חינם - מאגר נכים"]},
+  {"name":"שופרסל יש חסד בני ברק","details":["זמן חסד : 25 דקות","תעריף : 1 ₪ לדקה , מקסימום 100 ₪ עד חצות","נכים חינם - מאגר נכים"]},
+  {"name":"שופרסל ראשון לציון","details":["זמן חסד : 25 דקות","תעריף : 0.50 ₪ לדקה , מקסימום 80 ₪ עד חצות","נכים חינם - מאגר נכים","Ticketless"]},
+  {"name":"שופרסל רמת השרון","details":["זמן חסד : 25 דקות","תעריף : 0.50 ₪ לדקה , מקסימום 80 ₪ עד חצות","נכים חינם - מאגר נכים"]},
+  {"name":"שופרסל רמלה","details":["זמן חסד : 25 דקות","תעריף : 0.50 ₪ לדקה , מקסימום 80 ₪ עד חצות","נכים חינם - מאגר נכים"]},
+  {"name":"שופרסל שלמה המלך בני ברק","details":["זמן חסד : 25 דקות","תעריף : 0.50 ₪ לדקה , מקסימום 80 ₪ עד חצות","נכים חינם - מאגר נכים"]},
+  {"name":"שופרסל תלפיות","details":["זמן חסד : 25 דקות","תעריף : 1 ₪ לדקה , מקסימום 100 ₪ עד חצות"]},
+  {"name":"שבירו רעננה","details":["זמן חסד : שעתיים","תעריף : 0.45 ₪ לדקה , מקסימום 70 ₪ עד חצות","נכים חינם - מאגר נכים"]},
+  {"name":"בית חולים סורוקה","details":["זמן חסד : 20 דקות","תעריף : 25 ₪ עד חצות","נכים חינם - מאגר נכים","סלופארק + פנגו"]},
+  {"name":"טיב טעם ראשון לציון","details":["זמן חסד : 90 דקות","תעריף : 0.20 ₪ לדקה , 70 ₪ עד חצות"]},
+  {"name":"יד ושם","details":["זמן חסד : 20 דקות","תעריף : 28 ₪ בחניון מסחרי , 23 ₪ בחניון אוטובוסים (תשלום מראש)","חניה חינם למי שנכנס מ15:00 ועד 05:00 למחרת","נכים 4 שעות חינם , אחרי זה משלמים","Ticketless"]},
+  {"name":"יצחקי כפר יונה","details":["זמן חסד : שעתיים","תעריף : 0.30 ₪ לדקה , מקסימום עד חצות 60 ₪","נכים חינם - מאגר נכים","סלופארק + פנגו"]},
+  {"name":"היוזמה","details":["זמן חסד : 5 דקות","תעריף : 0.35 ₪ לדקה , 60 ₪ עד חצות","חניה חינם מיום שישי 15:00 ועד יום ראשון 07:00","Ticketless"]},
+  {"name":"יבנה 36","details":["זמן חסד : 5 דקות","תעריף : 0.40 ₪ לדקה (בין 07:00 ל17:00) , 0.35 ₪ לדקה (בין 17:00 ל07:00)","מקסימום 100 ₪ עד חצות","Ticketless"]},
+  {"name":"בית יחיל","details":["זמן חסד : 30 דקות","תעריף : 0.35 ₪ לדקה , 70 ₪ עד חצות","Ticketless"]},
+  {"name":"רנקו יגאל אלון","details":["זמן חסד : 10 דקות","תעריף לדקה 07:00-17:00: 0.40 ₪ , תעריף לדקה 17:00-07:00: 0.30 ₪ , מקסימום יומי 120 ₪","Ticketless"]}
+];
+// __ LOTS_END __
+
+// ── Rendering ─────────────────────────────────────────────────────────────────
+function classify(text) {
+  const t = text.trim().toLowerCase();
+  if (t.startsWith('זמן חסד')) return 'grace';
+  if (t.startsWith('תעריף') || t.startsWith('מחירון') || t.startsWith('שישי') ||
+      t.startsWith('משישי') || t.startsWith('מקסימום') || t.includes('₪')) return 'tariff';
+  if (t.includes('ticketless') || t.includes('סלופארק') || t.includes('פנגו')) return 'app';
+  return 'badge';
+}
+
+function iconFor(cls) {
+  if (cls === 'grace')  return { cls: 'icon-grace',  sym: '⏱' };
+  if (cls === 'tariff') return { cls: 'icon-tariff', sym: '₪' };
+  if (cls === 'app')    return { cls: 'icon-app',    sym: '📱' };
+  return                       { cls: 'icon-badge',  sym: 'ℹ' };
+}
+
+function buildCard(lot) {
+  const rows = lot.details.map(d => {
+    const cls = classify(d);
+    const ic  = iconFor(cls);
+    const textEl = cls === 'app'
+      ? `<span class="tag tag-app">${d}</span>`
+      : `<span class="detail-text">${d}</span>`;
+    return `<div class="detail-row"><div class="icon ${ic.cls}">${ic.sym}</div>${textEl}</div>`;
+  }).join('');
+
+  return `<div class="card" data-name="${lot.name.replace(/"/g,'&quot;')}">
+    <div class="card-header"><h2>${lot.name}</h2></div>
+    <div class="card-body">${rows}</div>
+  </div>`;
+}
+
+const grid      = document.getElementById('grid');
+const noResults = document.getElementById('no-results');
+const summary   = document.getElementById('summary');
+
+function renderLots(lots) {
+  // remove all cards
+  grid.querySelectorAll('.card').forEach(c => c.remove());
+  document.getElementById('search').value = '';
+
+  const sorted = [...lots].sort((a, b) => a.name.localeCompare(b.name, 'he'));
+  for (const lot of sorted) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = buildCard(lot);
+    grid.insertBefore(tmp.firstElementChild, noResults);
+  }
+  summary.textContent = `סה"כ ${sorted.length} חניונים`;
+  noResults.style.display = 'none';
+}
+
+// Initial render with built-in data
+renderLots(builtInLots);
+
+// ── Search ────────────────────────────────────────────────────────────────────
+function filterCards() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  let visible = 0;
+  const total = grid.querySelectorAll('.card').length;
+  grid.querySelectorAll('.card').forEach(card => {
+    const match = !q || card.dataset.name.toLowerCase().includes(q);
+    card.classList.toggle('hidden', !match);
+    if (match) visible++;
+  });
+  summary.textContent = q ? `מציג ${visible} מתוך ${total} חניונים` : `סה"כ ${total} חניונים`;
+  noResults.style.display = visible === 0 ? 'block' : 'none';
+}
+
+</script>
+
+</body>
+</html>

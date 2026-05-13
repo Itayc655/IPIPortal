@@ -1078,6 +1078,12 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                                                     foundUrlKey = key;
                                                                                     break;
                                                                                 }
+                                                                                // זיהוי נתיב פנימי (HTML route)
+                                                                                if (val.startsWith('/')) {
+                                                                                    foundUrl = val;
+                                                                                    foundUrlKey = key;
+                                                                                    break;
+                                                                                }
                                                                                 if (val.startsWith('\\\\') || /^[a-zA-Z]:\\/.test(val)) {
                                                                                     let fileUrl = val.replace(/\\/g, '/');
                                                                                     if (val.startsWith('\\\\')) {
@@ -1110,9 +1116,11 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                                     }
 
                                                                     if (foundUrl && !hasExtraContent) {
-                                                                        window.open(foundUrl, '_blank', 'noopener,noreferrer');
-                                                                    } else {
-                                                                        setViewItem({ item, section });
+                                                                        if (foundUrl.startsWith('/')) {
+                                                                            window.open(foundUrl, '_blank', 'noopener,noreferrer'); // or same tab
+                                                                        } else {
+                                                                            window.open(foundUrl, '_blank', 'noopener,noreferrer');
+                                                                        }
                                                                     }
                                                                 } catch (error) {
                                                                     setViewItem({ item, section });
