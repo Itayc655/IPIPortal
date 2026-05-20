@@ -96,7 +96,7 @@ export async function getCurrentUser() {
   for (const server of adServers) {
     try {
       // === התיקון הקריטי: מושכים את MemberOf בשאילתה אחת פשוטה ויציבה ===
-      const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "chcp 65001 >$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ADUser -Identity '${username}' -Server '${server}' -Properties Name,Department,Title,MemberOf | Select-Object Name,Department,Title,MemberOf | ConvertTo-Json"`;
+      const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "chcp 65001 >$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ADUser -Identity '${username}' -Server '${server}' -Properties Name,DisplayName,Department,Title,MemberOf | Select-Object Name,DisplayName,Department,Title,MemberOf | ConvertTo-Json"`;
 
       const { stdout } = await execPromise(psCommand, { 
           encoding: 'utf8', 
@@ -138,7 +138,7 @@ export async function getCurrentUser() {
 
     const fullUser = {
       username: username,
-      displayName: adData.Name || username,
+      displayName: adData.DisplayName || adData.Name || username,
       department: adData.Department || 'כללי',
       title: adData.Title || '',           
       groups: parsedGroups,         // <--- עכשיו זה מערך אמיתי עם שמות הקבוצות!
