@@ -95,6 +95,7 @@ function SortableField({ field, idx, updateFieldInSchema, removeFieldFromSchema 
                 <option value="password">🔑 שם משתמש וסיסמה</option>
                 <option value="file">📁 קבצים (מרובה)</option>
                 <option value="folder">תיקיית רשת / כונן</option>
+                <option value="logo">🖼️ לוגו / תמונה</option>
             </select>
 
             <button onClick={() => removeFieldFromSchema(field.key)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-full hover:bg-red-50 cursor-pointer">
@@ -1128,9 +1129,24 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                             }}
                                                             className={`relative group flex flex-col items-center justify-center text-center h-[130px] 2xl:h-[200px] p-4 2xl:p-5 bg-white rounded-[1.2rem] 2xl:rounded-[1.5rem] border-2 ${theme.border} shadow-lg ${theme.shadow} bg-gradient-to-br hover:border-transparent ${theme.gradientFrom} ${theme.gradientTo} hover:shadow-xl ${theme.hoverShadow} transition-all duration-500 ease-in-out hover:-translate-y-1 cursor-pointer overflow-hidden`}
                                                         >
-                                                            <div className={`absolute -right-4 2xl:-right-6 -bottom-4 2xl:-bottom-6 rotate-12 transition-all duration-700 group-hover:rotate-0 group-hover:scale-110 group-hover:text-white/10 ${theme.iconColor} scale-75 2xl:scale-100`}>
-                                                                <FileText size={90} />
-                                                            </div>
+                                                            {/* אייקון רקע דקורטיבי — לוגו אם קיים, אחרת FileText */}
+                                                            {(() => {
+                                                                const logoField = section.schema.find((f: any) => f.type === 'logo');
+                                                                const logoSrc = logoField ? item.data[logoField.key] : null;
+                                                                return logoSrc ? (
+                                                                    <div className="absolute bottom-2 right-4 z-0">
+                                                                        <img
+                                                                            src={logoSrc}
+                                                                            alt="לוגו"
+                                                                           className="h-16 w-16 2xl:h-20 2xl:w-20 object-contain opacity-80 group-hover:opacity-40 transition-opacity duration-500 select-none pointer-events-none drop-shadow-sm rounded-xl"
+                                                                        />
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className={`absolute -right-4 2xl:-right-6 -bottom-4 2xl:-bottom-6 rotate-12 transition-all duration-700 group-hover:rotate-0 group-hover:scale-110 group-hover:text-white/10 ${theme.iconColor} scale-75 2xl:scale-100`}>
+                                                                        <FileText size={90} />
+                                                                    </div>
+                                                                );
+                                                            })()}
 
                                                             <div className="relative z-10 flex flex-col items-center gap-2 transition-colors duration-300 w-full">
                                                                 <h3 className={`text-lg 2xl:text-xl font-extrabold text-slate-800 line-clamp-2 leading-tight group-hover:text-white w-full`}>
@@ -1419,6 +1435,15 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                 <div className="h-px flex-1 bg-slate-100"></div>
                                             </div>
 
+                                            {field.type === 'logo' && isString && (
+                                                <div className="flex justify-center py-2">
+                                                    <img
+                                                        src={rawVal as string}
+                                                        alt="לוגו"
+                                                        className="max-h-32 max-w-[240px] object-contain rounded-2xl border border-slate-100 shadow-sm bg-white p-3"
+                                                    />
+                                                </div>
+                                            )}
                                             {field.type === 'text' && isString && <p className="text-xl font-medium text-slate-800 leading-relaxed">{rawVal}</p>}
                                             {field.type === 'textarea' && isString && <div className="bg-slate-50 p-6 rounded-3xl text-lg text-slate-700 whitespace-pre-line leading-loose border border-slate-100">{rawVal}</div>}
                                             {field.type === 'link' && isString && (
@@ -1705,6 +1730,48 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                             <div className="relative">
                                                 <div className="absolute top-4 right-4 text-slate-400 pointer-events-none"><Folder size={20} /></div>
                                                 <input className="w-full border border-slate-200 rounded-2xl p-4 pr-12 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 text-left dir-ltr transition-all font-mono text-base bg-white" placeholder="\\server\share\folder או S:\Folder" value={newItemData[field.key] || ''} onChange={e => setNewItemData({ ...newItemData, [field.key]: e.target.value })} />
+                                            </div>
+                                        )}
+                                        {field.type === 'logo' && (
+                                            <div className="flex flex-col items-center gap-4 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                                                {newItemData[field.key] ? (
+                                                    <div className="relative group">
+                                                        <img
+                                                            src={newItemData[field.key]}
+                                                            alt="לוגו"
+                                                            className="h-24 w-auto max-w-[200px] object-contain rounded-xl border border-slate-200 shadow-sm bg-white p-2"
+                                                        />
+                                                        <button
+                                                            onClick={() => setNewItemData({ ...newItemData, [field.key]: '' })}
+                                                            className="absolute -top-2 -left-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-300">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
+                                                    </div>
+                                                )}
+                                                <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 text-slate-600 font-bold px-5 py-2.5 rounded-xl hover:bg-slate-100 transition-all text-sm shadow-sm">
+                                                    <Upload size={16} />
+                                                    {newItemData[field.key] ? 'החלף תמונה' : 'העלה לוגו'}
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        className="hidden"
+                                                        onChange={e => {
+                                                            const file = e.target.files?.[0];
+                                                            if (!file) return;
+                                                            const reader = new FileReader();
+                                                            reader.onload = ev => {
+                                                                setNewItemData({ ...newItemData, [field.key]: ev.target?.result as string });
+                                                            };
+                                                            reader.readAsDataURL(file);
+                                                        }}
+                                                    />
+                                                </label>
+                                                <p className="text-xs text-slate-400">PNG, JPG, SVG, WEBP — עד 2MB מומלץ</p>
                                             </div>
                                         )}
                                         {field.type === 'password' && (
