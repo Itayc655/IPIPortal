@@ -1111,7 +1111,8 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                                                 const cleanVal = val.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, '').trim();
                                                                                 if (cleanVal === '') isEmpty = true;
                                                                             } else if (Array.isArray(val) && val.length === 0) isEmpty = true;
-
+                                                                            const fieldSchema = section?.schema?.find((f: any) => f.key === key);
+                                                                            if (fieldSchema?.type === 'logo') isEmpty = true;
                                                                             if (!isEmpty) { hasExtraContent = true; break; }
                                                                         }
                                                                     }
@@ -1127,8 +1128,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                                     setViewItem({ item, section });
                                                                 }
                                                             }}
-                                                            className={`relative group flex flex-col items-center justify-center text-center h-[130px] 2xl:h-[200px] p-4 2xl:p-5 bg-white rounded-[1.2rem] 2xl:rounded-[1.5rem] border-2 ${theme.border} shadow-lg ${theme.shadow} bg-gradient-to-br hover:border-transparent ${theme.gradientFrom} ${theme.gradientTo} hover:shadow-xl ${theme.hoverShadow} transition-all duration-500 ease-in-out hover:-translate-y-1 cursor-pointer overflow-hidden`}
-                                                        >
+                                                            className={`relative group flex flex-col items-center justify-center text-center h-[130px] 2xl:h-[200px] p-4 2xl:p-5 bg-white rounded-[1.2rem] 2xl:rounded-[1.5rem] border-2 ${theme.border} shadow-lg ${theme.shadow} bg-gradient-to-br hover:border-transparent ${theme.gradientFrom} ${theme.gradientTo} hover:shadow-xl ${theme.hoverShadow} transition-all duration-500 ease-in-out hover:-translate-y-1 cursor-pointer overflow-hidden`}                                                        >
                                                             {/* אייקון רקע דקורטיבי — לוגו אם קיים, אחרת FileText */}
                                                             {(() => {
                                                                 const logoField = section.schema.find((f: any) => f.type === 'logo');
@@ -1138,7 +1138,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                                         <img
                                                                             src={logoSrc}
                                                                             alt="לוגו"
-                                                                           className="h-16 w-16 2xl:h-20 2xl:w-20 object-contain opacity-80 group-hover:opacity-40 transition-opacity duration-500 select-none pointer-events-none drop-shadow-sm rounded-xl"
+                                                                            className="h-16 w-16 2xl:h-20 2xl:w-20 object-contain opacity-80 group-hover:opacity-40 transition-opacity duration-500 select-none pointer-events-none drop-shadow-sm rounded-xl"
                                                                         />
                                                                     </div>
                                                                 ) : (
