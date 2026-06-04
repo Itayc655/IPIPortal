@@ -286,6 +286,17 @@ export async function POST(request: Request) {
       }
     }
 
+    else if (body.action === 'reorder_sections') {
+      const order: { id: number; sortOrder: number }[] = body.order || [];
+      for (const entry of order) {
+        const req = new sql.Request(pool);
+        await req
+          .input('Id', sql.BigInt, entry.id)
+          .input('SortOrder', sql.Int, entry.sortOrder)
+          .query('UPDATE Sections SET SortOrder = @SortOrder WHERE Id = @Id');
+      }
+    }
+    
     console.log('>>> 5. Fetching updated data from SQL...');
     const sectionsResult = await pool.request().query('SELECT * FROM Sections ORDER BY SortOrder ASC');
     const itemsResult = await pool.request().query(
