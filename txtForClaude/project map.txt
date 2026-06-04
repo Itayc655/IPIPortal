@@ -1,0 +1,361 @@
+================================================================================
+  IPI PORTAL — PROJECT MAP
+  Last updated: April 21, 2026
+  Purpose: Architecture reference for developers working on this codebase.
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+TABLE OF CONTENTS
+────────────────────────────────────────────────────────────────────────────────
+  1.  What This Is
+  2.  Tech Stack
+  3.  Folder & File Structure
+  4.  Layer-by-Layer Breakdown
+  5.  Database Schema (SQL Server)
+  6.  Authentication & Authorization Flow
+  7.  Visibility / Permissions System
+  8.  Data Encryption
+  9.  Key State Variables (ClientPage.tsx)
+  10. Edit Mode Flow
+  11. Phonebook Flow
+  12. Holiday / Memorial Day Decorations
+  13. Environment Variables
+  14. Security Status (Phase 1 & 2 Complete)
+  15. Remaining TODO Items
+  16. Deployment Notes
+
+
+────────────────────────────────────────────────────────────────────────────────
+1. WHAT THIS IS
+────────────────────────────────────────────────────────────────────────────────
+
+Internal enterprise portal for the IPI organization. A single-page app that
+serves as a centralized hub for:
+
+  - Browsing organizational knowledge cards (products, procedures, links)
+  - Role-based access control tied to Windows Active Directory (AD)
+  - A company phonebook with department filtering and Excel import/export
+  - System-wide announcements (scrolling ticker)
+  - Secure storage of credentials (usernames + encrypted passwords)
+  - Holiday and memorial day visual decorations (admin-toggled)
+
+One public route: GET /
+Everything else is API routes under /api/*.
+The entire UI lives in a single file: app/ClientPage.tsx
+
+
+────────────────────────────────────────────────────────────────────────────────
+2. TECH STACK
+────────────────────────────────────────────────────────────────────────────────
+
+  Runtime         Next.js 16 (App Router), React 19, TypeScript 5
+  Styling         Tailwind CSS 4
+  Animations      Framer Motion
+  Drag & Drop     @dnd-kit/core + @dnd-kit/sortable
+  Icons           Lucide React
+  Database        Microsoft SQL Server via `mssql` driver
+  Auth            NTLM (Windows Integrated Auth) decoded in lib/auth.ts
+  AD Enrichment   PowerShell → Get-ADUser (runs on the Next.js server)
+  Encryption      Node.js built-in `crypto` module, AES-256-CBC
+  JWT Sessions    `jose` library (HS256, 1-hour expiry)
+  Password Hash   bcryptjs
+  Excel           xlsx library (client-side parse + generate)
+
+
+────────────────────────────────────────────────────────────────────────────────
+3. FOLDER & FILE STRUCTURE
+────────────────────────────────────────────────────────────────────────────────
+
+  /
+  ├── app/
+  │   ├── page.tsx                    Server component entry point.
+  │   ├── ClientPage.tsx              ENTIRE UI (~1800 lines, client component).
+  │   ├── layout.tsx                  Root layout, loads fonts.
+  │   ├── globals.css                 Tailwind base + CSS variables.
+  │   └── api/
+  │       ├── auth/route.ts           POST. Login check + JWT cookie issuance.
+  │       ├── logout/route.ts         POST. Clears admin_token cookie.
+  │       ├── sections/route.ts       GET + POST. Main CRUD + visibility + encryption.
+  │       ├── phonebook/route.ts      GET + POST. Contact directory.
+  │       ├── messages/route.ts       GET + POST. System announcements.
+  │       ├── user/route.ts           GET. NTLM identity + AD lookup.
+  │       ├── settings/route.ts       GET + POST. Holiday decoration toggles.
+  │       └── verify-pin/route.ts     POST. Server-side PIN check for passwords.
+  │
+  ├── lib/
+  │   ├── auth.ts                     NTLM decode, AD enrichment, user cache,
+  │   │                               createAdminToken(), verifyAdminToken().
+  │   └── db.ts                       MSSQL connection pool singleton.
+  │                                   Reads all config from env vars only.
+  │
+  ├── components/
+  │   ├── IndependenceDayDecor.tsx    Bunting of Israeli flags across header.
+  │   └── MemorialDayBanner.tsx       Fixed black bar with candle animation.
+  │
+  ├── public/
+  │   ├── logo-red.png / logo-blue.png
+  │   └── docs/Ecode.pdf, SHcode.pdf
+  │
+  ├── txtForClaude/                   AI development reference docs.
+  │   ├── project map.txt             This file.
+  │   ├── prompt template.txt         Template for AI-assisted work.
+  │   └── Todo .txt                   Prioritized task list.
+  │
+  ├── .env                            Environment variables. NEVER commit.
+  ├── holiday-settings.json           Persists holiday decoration state.
+  └── dynamic_db.json                 LEGACY. Not used. Safe to delete.
+
+
+────────────────────────────────────────────────────────────────────────────────
+4. LAYER-BY-LAYER BREAKDOWN
+────────────────────────────────────────────────────────────────────────────────
+
+BROWSER / CLIENT (app/ClientPage.tsx)
+  - Admin detection: reads NEXT_PUBLIC_ADMIN_USERS env var.
+  - Dev mode: NEXT_PUBLIC_DEV_ADMIN=true bypasses AD check locally.
+  - On login: POST /api/auth → JWT cookie set by server automatically.
+  - On logout: POST /api/logout → cookie cleared, isEditMode = false.
+  - All write requests include the JWT cookie automatically (httpOnly).
+
+NEXT.JS SERVER (lib/)
+  - lib/auth.ts: getCurrentUser() + createAdminToken() + verifyAdminToken()
+  - lib/db.ts: reads DB_* env vars, throws if any are missing.
+
+API ROUTES (/api/*)
+  - auth:         bcrypt password check → JWT cookie
+  - logout:       clears cookie
+  - sections:     JWT verified on ALL POST requests (401 if invalid)
+                  editMode only works if JWT is valid
+  - verify-pin:   checks REVEAL_PIN env var server-side
+  - user:         validates input regex before PowerShell call
+  - phonebook, messages, settings: standard GET/POST
+
+DATA STORES
+  - SQL Server:   primary store for all data
+  - .env:         credentials and secrets
+  - holiday-settings.json: decoration state
+  - Active Directory: read-only, via PowerShell
+
+
+────────────────────────────────────────────────────────────────────────────────
+5. DATABASE SCHEMA (SQL Server)
+────────────────────────────────────────────────────────────────────────────────
+
+  Sections        Id, Title, Color, SchemaDef JSON
+                  Colors: red|blue|green|purple|orange|teal|indigo|pink
+                  Field types: text|textarea|link|password|file|folder
+
+  Items           Id, SectionId, Data JSON, visibility
+                  visibility: comma-separated list or 'הכל' (everyone)
+                  Password fields in Data are AES-256 encrypted.
+
+  SystemMessages  id (timestamp string), text, date (DD/MM/YYYY)
+
+  PhonebookConfig Id=1, SchemaDef JSON (column definitions)
+  PhonebookData   Id=1, Content JSON (all employee rows)
+
+  AuthorizedUsers Username (AD sAMAccountName, lowercase)
+                  Current: itayc, gal, michaelg, idant
+
+  GlobalSettings  SettingKey, SettingValue
+                  EditPassword → bcrypt hash (local) / plain text (production)
+
+
+────────────────────────────────────────────────────────────────────────────────
+6. AUTHENTICATION & AUTHORIZATION FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+  1. NTLM header → lib/auth.ts decodes username
+  2. Fallback: IP-to-username cache → guest user
+  3. AD enrichment: PowerShell Get-ADUser → department, title, groups (60min cache)
+  4. Admin login: POST /api/auth → bcrypt check → JWT cookie (httpOnly, 1h)
+  5. Writes: extract admin_token cookie → verifyAdminToken() → 401 if invalid
+  6. Logout: POST /api/logout → cookie cleared
+
+
+────────────────────────────────────────────────────────────────────────────────
+7. VISIBILITY / PERMISSIONS SYSTEM
+────────────────────────────────────────────────────────────────────────────────
+
+Server-side filtering in /api/sections GET.
+Item is shown if ANY of these match:
+  - visibility = 'הכל'
+  - editMode=true AND JWT is valid
+  - user's department in allow-list
+  - user's username in allow-list
+  - user's job title in allow-list
+  - any of user's AD groups in allow-list
+
+Items that don't pass are never sent to the browser.
+
+
+────────────────────────────────────────────────────────────────────────────────
+8. DATA ENCRYPTION
+────────────────────────────────────────────────────────────────────────────────
+
+AES-256-CBC. Key from ENCRYPTION_KEY env var (32 chars).
+Only `password` sub-field of 'password' type fields is encrypted.
+Format in SQL: "ivHex:cipherHex"
+Decrypted server-side before sending to client.
+
+Admin password: bcrypt hash in GlobalSettings.EditPassword.
+PIN: stored in REVEAL_PIN env var, checked server-side.
+
+
+────────────────────────────────────────────────────────────────────────────────
+9. KEY STATE VARIABLES (ClientPage.tsx)
+────────────────────────────────────────────────────────────────────────────────
+
+  sections              any[]     Categories + items from /api/sections
+  searchTerm            string    Global search
+  isEditMode            boolean   True when JWT session active
+  phonebookData         any[]     Saved phonebook (source of truth)
+  draftPhonebook        any[]     Working copy in edit mode
+  isPhonebookEditMode   boolean
+  systemMessages        array     [{ id, text, date }]
+  showHolidayDecor      boolean   Independence Day bunting
+  memorialDayType       null | 'holocaust' | 'idf'
+  unlockedPasswords     Record    fieldKey → secondsRemaining countdown
+  pendingAction         object    Deferred password action until PIN verified
+
+
+────────────────────────────────────────────────────────────────────────────────
+10. EDIT MODE FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+  Enter: lock button → login modal → POST /api/auth → JWT cookie → isEditMode=true
+  Active: all writes include cookie, server verifies on every POST
+  Exit: POST /api/logout → cookie cleared → isEditMode=false
+
+
+────────────────────────────────────────────────────────────────────────────────
+11. PHONEBOOK FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+  Draft/commit: phonebookData (saved) ↔ draftPhonebook (edit mode working copy)
+  Save: draftPhonebook → phonebookData + POST /api/phonebook
+  Birthday: filters by current month, format DD.MM.YYYY or DD/MM/YYYY
+  Excel import: client-side parse → validate → draftPhonebook → SQL
+
+
+────────────────────────────────────────────────────────────────────────────────
+12. HOLIDAY / MEMORIAL DAY DECORATIONS
+────────────────────────────────────────────────────────────────────────────────
+
+  State loaded from /api/settings on page mount (persists across reloads).
+  Saved to holiday-settings.json on every toggle.
+  Independence Day: IndependenceDayDecor.tsx — Israeli flag bunting
+  Memorial Day: MemorialDayBanner.tsx — fixed black bar, modes: holocaust|idf
+
+
+────────────────────────────────────────────────────────────────────────────────
+13. ENVIRONMENT VARIABLES
+────────────────────────────────────────────────────────────────────────────────
+
+Required in .env (NEVER commit):
+
+  # Database
+  DB_SERVER=localhost
+  DB_INSTANCE=SQLEXPRESS01        ← local
+  DB_INSTANCE=SQLEXPRESS          ← production
+  DB_NAME=ProductHub
+  DB_USER=sa
+  DB_PASSWORD=123456
+
+  # Security
+  ENCRYPTION_KEY=                 ← exactly 32 characters
+  JWT_SECRET=                     ← any strong random string
+  REVEAL_PIN=                     ← PIN for revealing passwords in UI
+
+  # Admin users (comma-separated AD usernames)
+  NEXT_PUBLIC_ADMIN_USERS=itayc,gal,michaelg,idant
+
+  # Local dev ONLY — never on production
+  NEXT_PUBLIC_DEV_ADMIN=true
+
+
+────────────────────────────────────────────────────────────────────────────────
+14. SECURITY STATUS (as of April 21, 2026)
+────────────────────────────────────────────────────────────────────────────────
+
+PHASE 1 — COMPLETE ✅
+  SEC-1  AES key moved to ENCRYPTION_KEY env var
+  SEC-2  Admin password hashed with bcrypt
+         Local: done. Production: needs hash-password script (see section 16)
+  SEC-3  PowerShell injection: input validated with regex before PS call
+  SEC-4  DB credentials in env vars, no hardcoded fallbacks
+  SEC-5  Password reveal PIN checked server-side via /api/verify-pin
+  SEC-6  Admin list in NEXT_PUBLIC_ADMIN_USERS env var
+  SEC-7  Dev bypass via NEXT_PUBLIC_DEV_ADMIN env var
+
+PHASE 2 — COMPLETE ✅
+  SEC-8  editMode protected — only works with valid JWT cookie
+  SEC-9  All POST /api/sections require valid JWT → 401 if missing/invalid
+
+MAINT-6 — COMPLETE ✅
+  Legacy /api/verify-password endpoint deleted
+
+
+────────────────────────────────────────────────────────────────────────────────
+15. REMAINING TODO ITEMS
+────────────────────────────────────────────────────────────────────────────────
+
+PHASE 3 — RELIABILITY
+  [ ] REL-1  CSRF protection (~1 hour)
+  [ ] REL-2  Rate limiting on /api/auth and /api/user (~1 hour)
+  [ ] REL-3  Zod input validation on all POST bodies (~2 hours)
+  [ ] REL-4  User cache size limit in lib/auth.ts (~30 min)
+
+PHASE 4 — FEATURES
+  [ ] FEAT-1  Replace PowerShell with ldapjs (~4 hours)
+  [ ] FEAT-3  Phonebook schema editor in admin UI (~2 hours)
+  [ ] FEAT-4  Audit logging for admin actions (~2 hours)
+  [ ] FEAT-5  Dedicated phonebook search field (~1 hour)
+  [ ] FEAT-7  Custom confirmation modals (~1.5 hours)
+  [ ] FEAT-8  Color picker for sections (~1 hour)
+  [ ] FEAT-9  Card drag-and-drop ordering (~3 hours)
+
+PHASE 5 — CLEANUP
+  [ ] MAINT-1  Split ClientPage.tsx into components (~4 hours)
+  [ ] MAINT-2  Move constants to lib/constants.ts (~20 min)
+  [ ] MAINT-3  TypeScript interfaces for core data shapes (~1.5 hours)
+  [ ] MAINT-4  Error boundaries (~1 hour)
+  [ ] MAINT-5  Health check endpoint /api/health (~20 min)
+  [ ] MAINT-7  README.md with setup instructions (~1 hour)
+
+PRODUCTION PENDING
+  [ ] Run hash-password script to hash EditPassword in production DB
+  [ ] Delete dynamic_db.json from production
+
+
+────────────────────────────────────────────────────────────────────────────────
+16. DEPLOYMENT NOTES
+────────────────────────────────────────────────────────────────────────────────
+
+Environments:
+  Local:       C:\IPIPortal          (DB_INSTANCE=SQLEXPRESS01)
+  Production:  C:\Users\itayc\Desktop\product-hub  (DB_INSTANCE=SQLEXPRESS)
+
+Deploy sequence:
+  1. git pull origin main
+  2. npm install
+  3. npm run build
+  4. pm2 restart all
+  5. pm2 logs --lines 20  →  verify "DB Pool Connected Successfully"
+  6. Test: portal loads, cards, phonebook, admin login, add/delete item
+
+Rollback:
+  git revert HEAD && npm run build && pm2 restart all
+
+After first deploy with new security code:
+  Create scripts/hash-password.mjs (see SEC-2 notes), run it once,
+  delete it immediately. This hashes EditPassword in production DB.
+
+Files required on server, not in git:
+  .env  (with all variables from section 13)
+  holiday-settings.json  (auto-created on first settings save)
+
+================================================================================
+END OF PROJECT MAP
+================================================================================

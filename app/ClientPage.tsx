@@ -1160,9 +1160,9 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                                     <div
                                                                         onClick={() => {
                                                                             try {
-                                                                                const firstField = section.schema[0];
-                                                                                if (firstField?.type === 'link') {
-                                                                                    window.open(item.data[firstField.key], '_blank', 'noopener,noreferrer');
+                                                                                const linkField = section.schema.find((f: any) => f.type === 'link');
+                                                                                if (linkField && item.data[linkField.key]) {
+                                                                                    window.open(item.data[linkField.key], '_blank', 'noopener,noreferrer');
                                                                                 } else {
                                                                                     setViewItem({ item, section });
                                                                                 }
@@ -1189,10 +1189,26 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                                             </div>
                                                                         )}
 
-                                                                        {/* כותרת הכרטיסייה */}
-                                                                        <p className="relative z-10 font-black text-base 2xl:text-xl text-slate-700 group-hover/card:text-white transition-colors duration-300 leading-tight line-clamp-3">
-                                                                            {displayTitle}
-                                                                        </p>
+                                                                        {/* לוגו או כותרת */}
+                                                                        {(() => {
+                                                                            const logoField = section.schema.find((f: any) => f.type === 'logo');
+                                                                            const logoVal = logoField ? item.data[logoField.key] : null;
+                                                                            return logoVal ? (
+                                                                                <>
+                                                                                    <p className="relative z-10 font-black text-base 2xl:text-xl text-slate-700 group-hover/card:text-white transition-colors duration-300 leading-tight line-clamp-2 text-center w-full">
+                                                                                        {displayTitle}
+                                                                                    </p>
+                                                                                    <img
+                                                                                        src={logoVal}
+                                                                                        alt={displayTitle}
+                                                                                        className="absolute bottom-2 right-2 z-10 max-h-20 2xl:max-h-24 max-w-[140px] 2xl:max-w-[180px] object-contain" />
+                                                                                </>
+                                                                            ) : (
+                                                                                <p className="relative z-10 font-black text-base 2xl:text-xl text-slate-700 group-hover/card:text-white transition-colors duration-300 leading-tight line-clamp-3">
+                                                                                    {displayTitle}
+                                                                                </p>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                 </SortableCard>
                                                             );
