@@ -132,8 +132,9 @@ export async function GET(request: Request) {
     const pool = await getConnection();
 
     const sectionsResult = await pool.request().query('SELECT * FROM Sections ORDER BY SortOrder ASC');
-    const itemsResult = await pool.request().query('SELECT * FROM Items');
-
+    const itemsResult = await pool.request().query(
+      'SELECT * FROM Items ORDER BY SectionId, COALESCE(SortOrder, 0) ASC, Id ASC'
+    );
     const sections = sectionsResult.recordset;
     const items = itemsResult.recordset;
 
@@ -274,20 +275,22 @@ export async function POST(request: Request) {
         .input('Id', sql.BigInt, body.itemId)
         .query('DELETE FROM Items WHERE Id = @Id');
     }
-    else if (body.action === 'reorder_sections') {
-      for (const item of body.order) {
+    else if (body.action === 'reorder_items') {
+      const order: { id: number; sortOrder: number }[] = body.order || [];
+      for (const entry of order) {
         const req = new sql.Request(pool);
         await req
-          .input('Id', sql.BigInt, item.id)
-          .input('SortOrder', sql.Int, item.sortOrder)
-          .query('UPDATE Sections SET SortOrder = @SortOrder WHERE Id = @Id');
+          .input('Id', sql.BigInt, entry.id)
+          .input('SortOrder', sql.Int, entry.sortOrder)
+          .query('UPDATE Items SET SortOrder = @SortOrder WHERE Id = @Id');
       }
     }
 
     console.log('>>> 5. Fetching updated data from SQL...');
     const sectionsResult = await pool.request().query('SELECT * FROM Sections ORDER BY SortOrder ASC');
-    const itemsResult = await pool.request().query('SELECT * FROM Items');
-
+    const itemsResult = await pool.request().query(
+      'SELECT * FROM Items ORDER BY SectionId, COALESCE(SortOrder, 0) ASC, Id ASC'
+    );
     const sectionsData = sectionsResult.recordset;
     const itemsData = itemsResult.recordset;
 
