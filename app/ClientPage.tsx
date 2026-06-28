@@ -1201,7 +1201,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
                                                                                     <img
                                                                                         src={logoVal}
                                                                                         alt={displayTitle}
-                                                                                        className="absolute bottom-2 right-2 z-10 max-h-20 2xl:max-h-24 max-w-[140px] 2xl:max-w-[180px] object-contain" />
+                                                                                        className="absolute bottom-2 right-2 z-0 max-h-20 2xl:max-h-24 max-w-[140px] 2xl:max-w-[180px] object-contain" />
                                                                                 </>
                                                                             ) : (
                                                                                 <p className="relative z-10 font-black text-base 2xl:text-xl text-slate-700 group-hover/card:text-white transition-colors duration-300 leading-tight line-clamp-3">
