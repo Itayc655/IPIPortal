@@ -175,7 +175,7 @@ export default function DynamicIPIDashboard({ initialUser }: any) {
 
     // ==================== הרשאות ובסיס (PERMISSIONS) ====================
     // רשימת המורשים לעריכה (Admins)
-    const authorizedAdmins = ['itayc', 'gal', 'michaelg'].map(u => u.toLowerCase());
+    const authorizedAdmins = ['itayc', 'gal', 'michaelg','Secretary'].map(u => u.toLowerCase());
 
     // מעקף סביבת פיתוח: מזהה אם אנחנו רצים מקומית ונותן הרשאות אוטומטית
     const isUserAdmin = process.env.NODE_ENV === 'development'
